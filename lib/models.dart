@@ -70,6 +70,11 @@ class VideoScript {
   final int duration;
   final int createdAt;
 
+  // ---- حقول من قاعدة البيانات (موش من الـAPI) ----
+  final int? dbId;
+  final bool isFavorite;
+  final int? publishedAt;
+
   const VideoScript({
     required this.title,
     required this.hookIdea,
@@ -84,6 +89,9 @@ class VideoScript {
     required this.style,
     required this.duration,
     required this.createdAt,
+    this.dbId,
+    this.isFavorite = false,
+    this.publishedAt,
   });
 
   factory VideoScript.fromJson(Map<String, dynamic> j) => VideoScript(
@@ -118,7 +126,14 @@ class VideoScript {
         'createdAt': createdAt,
       };
 
-  VideoScript copyWith({List<Segment>? segments}) => VideoScript(
+  VideoScript copyWith({
+    List<Segment>? segments,
+    int? dbId,
+    bool? isFavorite,
+    int? publishedAt,
+    bool clearPublished = false,
+  }) =>
+      VideoScript(
         title: title,
         hookIdea: hookIdea,
         segments: segments ?? this.segments,
@@ -132,6 +147,9 @@ class VideoScript {
         style: style,
         duration: duration,
         createdAt: createdAt,
+        dbId: dbId ?? this.dbId,
+        isFavorite: isFavorite ?? this.isFavorite,
+        publishedAt: clearPublished ? null : (publishedAt ?? this.publishedAt),
       );
 
   VideoScript withSegment(int index, Segment s) =>

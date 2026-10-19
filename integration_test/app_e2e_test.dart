@@ -5,15 +5,16 @@
 
 import 'dart:convert';
 
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tiktok_studio/db/database.dart';
 import 'package:tiktok_studio/exporter.dart';
 import 'package:tiktok_studio/main.dart';
 import 'package:tiktok_studio/models.dart';
@@ -74,6 +75,8 @@ class FakeClaude {
   String prompt(int i) => (body(i)['messages'] as List).first['content'] as String;
 
   late final client = MockClient((req) async {
+    // طلبات الخطوط (google_fonts): نرجّعو 404 باش يرجع للخطّ الافتراضي، بلا ما نلوّثو requests
+    if (!req.url.host.contains('ollama')) return http.Response('', 404);
     requests.add(req);
     final p = (jsonDecode(req.body)['messages'] as List).first['content'] as String;
     if (override != null) return override!(p);
@@ -147,8 +150,6 @@ Future<void> _saveKey(WidgetTester tester, String key) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  // ما نحمّلوش الخطوط من النت وقت التست (باش ما تمرّش عبر الـMockClient وتعلّق)
-  GoogleFonts.config.allowRuntimeFetching = false;
 
   late FakeClaude claude;
 
@@ -180,6 +181,8 @@ void main() {
 
   setUp(() async {
     await _resetStorage();
+    // قاعدة في الذاكرة لكل تست (ما نلوّثوش قاعدة المستعمل الحقيقية)
+    AppDatabase.instance = AppDatabase.forTesting(NativeDatabase.memory());
     claude = FakeClaude();
   });
 
@@ -315,7 +318,7 @@ void main() {
       // ---- المحفوظات ----
       await _goTab(tester, 'المحفوظات');
       await _waitFor(tester, _in<HistoryScreen>(find.text('سرّ الضغط العالي')));
-      expect(find.text('Football – 30s'), findsOneWidget);
+      expect(find.textContaining('Football – 30s'), findsOneWidget);
 
       await _tap(tester, _in<HistoryScreen>(find.text('سرّ الضغط العالي')));
       expect(find.byType(ResultScreen), findsOneWidget);
@@ -370,7 +373,7 @@ void main() {
       await _waitFor(tester, find.text('تسجّل التبديل ✅'));
       expect(find.text('صوت بيدّي'), findsOneWidget);
       expect(find.text('تعرف علاش برشلونة تضغط؟'), findsNothing);
-      expect((await AppStorage.loadHistory()).first.segments[0].voice, 'صوت بيدّي');
+      expect((await AppStorage.searchScripts()).first.segments[0].voice, 'صوت بيدّي');
       await _clearSnackBars(tester);
 
       // ---- بطّل: ما يتبدّل شي ----
@@ -409,7 +412,7 @@ void main() {
       await _tap(tester, find.text('سجّل التبديل'));
       await _waitFor(tester, find.text('صوت جديد من Claude'));
       expect(find.text('نص جديد'), findsOneWidget);
-      final saved = (await AppStorage.loadHistory()).first;
+      final saved = (await AppStorage.searchScripts()).first;
       expect(saved.segments[1].voice, 'صوت جديد من Claude');
       expect(saved.segments[1].from, 10);
       expect(saved.segments[1].to, 20);
@@ -465,7 +468,7 @@ void main() {
 
       final plans = await AppStorage.loadPlans();
       expect(plans, hasLength(1));
-      final scriptId = (await AppStorage.loadHistory()).first.createdAt;
+      final scriptId = (await AppStorage.searchScripts()).first.createdAt;
       expect(plans.first.scriptId, scriptId);
       expect(plans.first.reminder, isFalse);
       final tomorrow = DateTime.now().add(const Duration(days: 1));
@@ -561,6 +564,54 @@ void main() {
     expect(content, contains('[00–10s]'));
     expect(content, contains('#football #tactics #تونس'));
     await f.delete();
+  });
+
+  testWidgets('المحفوظات: بحث + فلترة + مفضّلة (F21-F23)', (tester) async {
+    VideoScript seed(String title, String cat, int created) => VideoScript.fromJson({
+          'title': title,
+          'category': cat,
+          'style': 'الشاشة فقط',
+          'duration': 20,
+          'segments': [
+            {'from': 0, 'to': 20, 'screen': 's', 'text': 't', 'voice': '$title voice'}
+          ],
+          'caption': 'c',
+          'hashtags': ['#a'],
+          'createdAt': created,
+        });
+
+    await http.runWithClient(() async {
+      await AppStorage.saveScript(seed('سرّ الضغط العالي', 'Football', 1000));
+      await AppStorage.saveScript(seed('AI يصلّح bug', 'Dev AI', 2000));
+
+      await _launch(tester);
+      await _goTab(tester, 'المحفوظات');
+      await _waitFor(tester, _in<HistoryScreen>(find.text('AI يصلّح bug')));
+      expect(_in<HistoryScreen>(find.byType(ListTile)), findsNWidgets(2));
+
+      // ---- بحث (F21) ----
+      await tester.enterText(_in<HistoryScreen>(find.byType(TextField)), 'ضغط');
+      await tester.pumpAndSettle();
+      expect(find.text('سرّ الضغط العالي'), findsOneWidget);
+      expect(find.text('AI يصلّح bug'), findsNothing);
+      await _tap(tester, find.byIcon(Icons.close)); // نمسحو البحث
+      expect(_in<HistoryScreen>(find.byType(ListTile)), findsNWidgets(2));
+
+      // ---- فلترة حسب النوع (F23) ----
+      await _tap(tester, find.text('🤖 Dev AI'));
+      expect(find.text('AI يصلّح bug'), findsOneWidget);
+      expect(find.text('سرّ الضغط العالي'), findsNothing);
+      await _tap(tester, find.text('الكل'));
+      expect(_in<HistoryScreen>(find.byType(ListTile)), findsNWidgets(2));
+
+      // ---- مفضّلة (F22) ----
+      await _tap(tester, _in<HistoryScreen>(find.byIcon(Icons.star_border)).first);
+      await _tap(tester, find.text('⭐ المفضّلة'));
+      expect(_in<HistoryScreen>(find.byType(ListTile)), findsNWidgets(1));
+      // نرجّعو الفلتر
+      await _tap(tester, find.text('⭐ المفضّلة'));
+      expect(_in<HistoryScreen>(find.byType(ListTile)), findsNWidgets(2));
+    }, () => claude.client);
   });
 
   group('أخطاء الـAPI تبان بالدارجة', () {

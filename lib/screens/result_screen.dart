@@ -5,6 +5,7 @@ import '../exporter.dart';
 import '../models.dart';
 import '../reminders.dart';
 import '../storage.dart';
+import '../theme.dart';
 import 'plan_editor.dart';
 import 'segment_editor.dart';
 import 'teleprompter_screen.dart';
@@ -50,6 +51,14 @@ class _ResultScreenState extends State<ResultScreen> {
     _snack('تزاد للبرنامج: ${formatDay(p.date)} ${formatTime(p.date)} 📅');
   }
 
+  void _onMenu(String what) {
+    if (what == 'publish') {
+      _togglePublished();
+    } else {
+      _share(what);
+    }
+  }
+
   Future<void> _share(String what) async {
     try {
       switch (what) {
@@ -65,6 +74,23 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
+  Future<void> _toggleFav() async {
+    if (script.dbId == null) return;
+    final fav = !script.isFavorite;
+    setState(() => script = script.copyWith(isFavorite: fav));
+    await AppStorage.setFavorite(script.dbId!, fav);
+    _snack(fav ? 'تزادت للمفضّلة ⭐' : 'تشالت من المفضّلة');
+  }
+
+  Future<void> _togglePublished() async {
+    if (script.dbId == null) return;
+    final publish = script.publishedAt == null;
+    final ts = publish ? DateTime.now().millisecondsSinceEpoch : null;
+    setState(() => script = script.copyWith(publishedAt: ts, clearPublished: !publish));
+    await AppStorage.setPublished(script.dbId!, ts);
+    _snack(publish ? 'تعلّم كتنشر ✅' : 'تشال وسم النشر');
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -74,6 +100,13 @@ class _ResultScreenState extends State<ResultScreen> {
       appBar: AppBar(
         title: Text(script.title, overflow: TextOverflow.ellipsis),
         actions: [
+          if (script.dbId != null)
+            IconButton(
+              tooltip: script.isFavorite ? 'شيل من المفضّلة' : 'زيد للمفضّلة',
+              icon: Icon(script.isFavorite ? Icons.star : Icons.star_border,
+                  color: script.isFavorite ? AppColors.warning : null),
+              onPressed: _toggleFav,
+            ),
           IconButton(
             tooltip: 'زيد للبرنامج',
             icon: const Icon(Icons.event_available),
@@ -85,13 +118,16 @@ class _ResultScreenState extends State<ResultScreen> {
             onPressed: () => _copy(context, script.fullText()),
           ),
           PopupMenuButton<String>(
-            tooltip: 'شارك',
-            icon: const Icon(Icons.share),
-            onSelected: _share,
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'script', child: Text('📝 شارك السكريبت كامل')),
-              PopupMenuItem(value: 'caption', child: Text('📲 شارك الـcaption')),
-              PopupMenuItem(value: 'txt', child: Text('📄 صدّر fichier .txt')),
+            tooltip: 'المزيد',
+            onSelected: _onMenu,
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'script', child: Text('📝 شارك السكريبت كامل')),
+              const PopupMenuItem(value: 'caption', child: Text('📲 شارك الـcaption')),
+              const PopupMenuItem(value: 'txt', child: Text('📄 صدّر fichier .txt')),
+              if (script.dbId != null)
+                PopupMenuItem(
+                    value: 'publish',
+                    child: Text(script.publishedAt == null ? '✅ علّم كتنشر' : '↩️ شيل وسم النشر')),
             ],
           ),
         ],

@@ -76,10 +76,10 @@ class _StudioScreenState extends State<StudioScreen> {
       if (script.segments.isEmpty) {
         throw ClaudeException('الجواب جا ناقص. عاود جرّب.');
       }
-      await AppStorage.saveScript(script);
+      final saved = await AppStorage.saveScript(script);
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ResultScreen(script: script)),
+        MaterialPageRoute(builder: (_) => ResultScreen(script: saved)),
       );
     } catch (e) {
       _snack(errorMessage(e));

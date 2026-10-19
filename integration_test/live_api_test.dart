@@ -69,7 +69,7 @@ void main() {
   testWidgets('UI كاملة مع Claude الحقيقي: حضّر ← نتيجة ← Teleprompter ← محفوظات', (tester) async {
     if (await _key() == null) fail(_noKey);
     if (_defineKey.isNotEmpty) await AppStorage.setApiKey(_defineKey);
-    final before = (await AppStorage.loadHistory()).length;
+    final before = (await AppStorage.searchScripts()).length;
 
     await tester.pumpWidget(const TikTokStudioApp());
     await tester.pumpAndSettle();
@@ -100,7 +100,7 @@ void main() {
     expect(find.text('🎬 السكريبت ثانية بثانية'), findsOneWidget);
     expect(find.textContaining(RegExp(r'^00–\d\ds$')), findsWidgets);
 
-    final saved = await AppStorage.loadHistory();
+    final saved = await AppStorage.searchScripts();
     expect(saved.length, before + 1);
     final script = saved.first;
     debugPrint('LIVE UI: "${script.title}" | ${script.segments.length} segments | '

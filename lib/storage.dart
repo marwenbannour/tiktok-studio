@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'db/database.dart';
 import 'models.dart';
 
 class AppStorage {
@@ -51,51 +53,92 @@ class AppStorage {
     await p.setString(_modelName, m);
   }
 
-  // ---- المحفوظات ----
-  static Future<List<VideoScript>> loadHistory() async {
-    final p = await SharedPreferences.getInstance();
-    final raw = p.getString(_historyName);
-    if (raw == null) return [];
-    try {
-      return (jsonDecode(raw) as List)
-          .map((e) => VideoScript.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-    } catch (_) {
-      return [];
-    }
+  // ---- المحفوظات (SQLite / drift — بلا حدّ، مع بحث وفلترة) ----
+  static AppDatabase get _db => AppDatabase.instance;
+
+  static VideoScript _toScript(Script r) {
+    final j = jsonDecode(r.content) as Map<String, dynamic>;
+    return VideoScript.fromJson({
+      ...j,
+      'category': r.category,
+      'style': r.style,
+      'duration': r.duration,
+      'createdAt': r.createdAt,
+    }).copyWith(dbId: r.id, isFavorite: r.isFavorite, publishedAt: r.publishedAt);
   }
 
-  static Future<void> _write(List<VideoScript> list) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_historyName, jsonEncode(list.map((s) => s.toJson()).toList()));
+  /// بحث + فلترة حسب النوع + مفضّلة برك (F21, F22, F23)
+  static Future<List<VideoScript>> searchScripts({
+    String query = '',
+    String? category,
+    bool favoritesOnly = false,
+  }) async {
+    await _migrateOldHistory();
+    final rows = await _db.search(query: query, category: category, favoritesOnly: favoritesOnly);
+    return rows.map(_toScript).toList();
   }
 
-  static Future<void> saveScript(VideoScript s) async {
-    final list = await loadHistory();
-    list.insert(0, s);
-    await _write(list.take(30).toList());
+  static Future<int> scriptCount() => _db.total();
+
+  /// يسجّل سكريبت جديد ويرجّعو مع الـdbId (F16 — بلا حدّ)
+  static Future<VideoScript> saveScript(VideoScript s) async {
+    await _migrateOldHistory();
+    final model = await getModel();
+    final id = await _db.add(ScriptsCompanion.insert(
+      title: s.title,
+      category: s.category,
+      style: s.style,
+      duration: s.duration,
+      content: jsonEncode(s.toJson()),
+      createdAt: s.createdAt,
+      model: Value(model),
+    ));
+    return s.copyWith(dbId: id);
   }
 
-  static Future<void> deleteAt(int index) async {
-    final list = await loadHistory();
-    if (index >= 0 && index < list.length) list.removeAt(index);
-    await _write(list);
-  }
+  static Future<void> deleteScript(int dbId) => _db.remove(dbId);
 
-  /// يبدّل السكريبت اللي عندو نفس الـcreatedAt (بعد التعديل)
   static Future<void> updateScript(VideoScript s) async {
-    final list = await loadHistory();
-    final i = list.indexWhere((e) => e.createdAt == s.createdAt);
-    if (i < 0) return;
-    list[i] = s;
-    await _write(list);
+    if (s.dbId == null) return;
+    await _db.updateContent(s.dbId!, s.title, jsonEncode(s.toJson()));
   }
+
+  static Future<void> setFavorite(int dbId, bool fav) => _db.setFavorite(dbId, fav);
+
+  static Future<void> setPublished(int dbId, int? ts) => _db.setPublished(dbId, ts);
 
   static Future<VideoScript?> findScript(int createdAt) async {
-    for (final s in await loadHistory()) {
-      if (s.createdAt == createdAt) return s;
+    final r = await _db.byCreatedAt(createdAt);
+    return r == null ? null : _toScript(r);
+  }
+
+  /// ترحيل المحفوظات القديمة (SharedPreferences) للقاعدة، مرّة وحدة
+  static bool _migrated = false;
+  static Future<void> _migrateOldHistory() async {
+    if (_migrated) return;
+    _migrated = true;
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_historyName);
+    if (raw == null) return;
+    try {
+      final list = (jsonDecode(raw) as List)
+          .map((e) => VideoScript.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      for (final s in list.reversed) {
+        if (await _db.byCreatedAt(s.createdAt) != null) continue;
+        await _db.add(ScriptsCompanion.insert(
+          title: s.title,
+          category: s.category,
+          style: s.style,
+          duration: s.duration,
+          content: jsonEncode(s.toJson()),
+          createdAt: s.createdAt,
+        ));
+      }
+    } catch (e) {
+      debugPrint('migrate history: $e');
     }
-    return null;
+    await p.remove(_historyName);
   }
 
   // ---- البرنامج ----
