@@ -39,6 +39,12 @@ class _StudioScreenState extends State<StudioScreen> {
   List<String> _ideas = [];
   ({String category, double avgViews, int count})? _best; // نصيحة V2
 
+  // سلاسل الحلقات (V2)
+  static const _newSeriesTag = '__new__';
+  final _newSeries = TextEditingController();
+  List<String> _seriesList = [];
+  String? _series; // null = بلا سلسلة ; '__new__' = سلسلة جديدة ; غير هكّا = موجودة
+
   @override
   void initState() {
     super.initState();
@@ -48,14 +54,29 @@ class _StudioScreenState extends State<StudioScreen> {
   Future<void> _loadInsight() async {
     try {
       final b = await AppStorage.bestCategory();
-      if (mounted) setState(() => _best = b);
+      final s = await AppStorage.seriesTitles();
+      if (mounted) {
+        setState(() {
+          _best = b;
+          _seriesList = s;
+          if (_series != null && _series != _newSeriesTag && !s.contains(_series)) _series = null;
+        });
+      }
     } catch (_) {}
   }
 
   @override
   void dispose() {
     _idea.dispose();
+    _newSeries.dispose();
     super.dispose();
+  }
+
+  /// اسم السلسلة المختار (فارغ = بلا سلسلة)
+  String get _seriesName {
+    if (_series == null) return '';
+    if (_series == _newSeriesTag) return _newSeries.text.trim();
+    return _series!;
   }
 
   void _snack(String m) {
@@ -86,13 +107,27 @@ class _StudioScreenState extends State<StudioScreen> {
     }
     setState(() => _loading = true);
     try {
+      // سلسلة (V2): سياق الحلقات السابقة + رقم الحلقة
+      final series = _seriesName;
+      String seriesContext = '';
+      int? episode;
+      if (series.isNotEmpty) {
+        episode = await AppStorage.nextEpisode(series);
+        final prev = await AppStorage.seriesEpisodes(series);
+        seriesContext = prev
+            .map((e) => 'الحلقة ${e.episode}: ${e.title}'
+                '${e.hookIdea.isEmpty ? '' : ' — ${e.hookIdea}'}')
+            .join('\n');
+      }
+
       final json = await api.askJson(Prompts.script(
         category: _category,
         idea: _idea.text.trim(),
         style: _style,
         duration: _duration,
+        seriesContext: seriesContext,
       ));
-      final script = VideoScript.fromJson({
+      var script = VideoScript.fromJson({
         ...json,
         'category': _category,
         'style': _style,
@@ -101,6 +136,9 @@ class _StudioScreenState extends State<StudioScreen> {
       });
       if (script.segments.isEmpty) {
         throw ClaudeException('الجواب جا ناقص. عاود جرّب.');
+      }
+      if (series.isNotEmpty) {
+        script = script.copyWith(seriesTitle: series, episode: episode);
       }
       final saved = await AppStorage.saveScript(script);
       await AppStorage.incrementGenCount(); // F20
@@ -237,6 +275,37 @@ class _StudioScreenState extends State<StudioScreen> {
                   }),
                 ),
               )),
+          _label('📺 سلسلة (اختياري)'),
+          DropdownButtonFormField<String?>(
+            initialValue: _series,
+            isExpanded: true,
+            decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('بلا سلسلة')),
+              for (final s in _seriesList) DropdownMenuItem(value: s, child: Text('📺 $s')),
+              const DropdownMenuItem(value: _newSeriesTag, child: Text('➕ سلسلة جديدة')),
+            ],
+            onChanged: (v) => setState(() => _series = v),
+          ),
+          if (_series == _newSeriesTag)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextField(
+                controller: _newSeries,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: 'اسم السلسلة الجديدة',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          if (_seriesName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('باش يكمّل القصّة من الحلقات اللي فاتت في «$_seriesName» 🔗',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.cyan)),
+            ),
           _label('كيفاش تظهر في الفيديو'),
           _chips(_styles, _style, (v) => _style = v),
           _label('المدّة'),

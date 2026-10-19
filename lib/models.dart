@@ -77,8 +77,11 @@ class VideoScript {
   final int? views;
   final int? likes;
   final int? comments;
+  final String? seriesTitle;
+  final int? episode;
 
   bool get hasStats => views != null || likes != null || comments != null;
+  bool get inSeries => seriesTitle != null && seriesTitle!.isNotEmpty;
 
   const VideoScript({
     required this.title,
@@ -100,6 +103,8 @@ class VideoScript {
     this.views,
     this.likes,
     this.comments,
+    this.seriesTitle,
+    this.episode,
   });
 
   factory VideoScript.fromJson(Map<String, dynamic> j) => VideoScript(
@@ -144,6 +149,8 @@ class VideoScript {
     int? likes,
     int? comments,
     bool setStats = false,
+    String? seriesTitle,
+    int? episode,
   }) =>
       VideoScript(
         title: title,
@@ -165,6 +172,8 @@ class VideoScript {
         views: setStats ? views : (views ?? this.views),
         likes: setStats ? likes : (likes ?? this.likes),
         comments: setStats ? comments : (comments ?? this.comments),
+        seriesTitle: seriesTitle ?? this.seriesTitle,
+        episode: episode ?? this.episode,
       );
 
   VideoScript withSegment(int index, Segment s) =>

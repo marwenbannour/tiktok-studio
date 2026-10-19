@@ -108,6 +108,8 @@ class AppStorage {
       views: r.views,
       likes: r.likes,
       comments: r.comments,
+      seriesTitle: r.seriesTitle,
+      episode: r.episode,
     );
   }
 
@@ -136,6 +138,8 @@ class AppStorage {
       content: jsonEncode(s.toJson()),
       createdAt: s.createdAt,
       model: Value(model),
+      seriesTitle: Value(s.seriesTitle),
+      episode: Value(s.episode),
     ));
     return s.copyWith(dbId: id);
   }
@@ -158,6 +162,12 @@ class AppStorage {
   /// النوع اللي يخدم أكثر (لتوجيه المواضيع الجاية)
   static Future<({String category, double avgViews, int count})?> bestCategory() =>
       _db.bestCategory();
+
+  // ---- السلاسل (V2) ----
+  static Future<List<String>> seriesTitles() => _db.seriesTitles();
+  static Future<int> nextEpisode(String title) => _db.nextEpisode(title);
+  static Future<List<VideoScript>> seriesEpisodes(String title) async =>
+      (await _db.seriesEpisodes(title)).map(_toScript).toList();
 
   static Future<VideoScript?> findScript(int createdAt) async {
     final r = await _db.byCreatedAt(createdAt);

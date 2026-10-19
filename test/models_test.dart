@@ -50,6 +50,25 @@ void main() {
     });
   });
 
+  group('Prompts.script — سلسلة (V2)', () {
+    test('السياق يدخل كي يكون فما سلسلة', () {
+      final p = Prompts.script(
+          category: 'Dev AI',
+          idea: '',
+          style: 'x',
+          duration: 20,
+          seriesContext: 'الحلقة 1: البداية — فكرة');
+      expect(p, contains('هذا جزء من سلسلة حلقات متواصلة'));
+      expect(p, contains('الحلقة 1: البداية'));
+      expect(p, contains('كمّل القصّة'));
+    });
+
+    test('بلا سياق → ما فيهاش كلام السلسلة', () {
+      final p = Prompts.script(category: 'Dev AI', idea: '', style: 'x', duration: 20);
+      expect(p, isNot(contains('هذا جزء من سلسلة')));
+    });
+  });
+
   group('PlannedVideo', () {
     test('JSON يمشي ويرجع', () {
       final p = PlannedVideo(

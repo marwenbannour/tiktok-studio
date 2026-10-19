@@ -160,6 +160,22 @@ class _ResultScreenState extends State<ResultScreen> {
         children: [
           Text('${script.category} – ${script.duration} ثانية – 9:16',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+          if (script.inSeries)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.cyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('📺 ${script.seriesTitle} · حلقة ${script.episode}',
+                      style: const TextStyle(color: AppColors.cyan, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
           if (script.hookIdea.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),

@@ -670,6 +670,44 @@ void main() {
     }, () => claude.client);
   });
 
+  testWidgets('سلاسل الحلقات: حلقة 1 ثم حلقة 2 بالسياق (V2)', (tester) async {
+    await http.runWithClient(() async {
+      await _launch(tester);
+      await _saveKey(tester, _fakeKey);
+
+      // اختار «➕ سلسلة جديدة» واكتب الاسم
+      await _tap(tester, find.byType(DropdownButtonFormField<String?>));
+      await _tap(tester, find.text('➕ سلسلة جديدة').last);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'اسم السلسلة الجديدة'), 'رحلتي مع البرمجة');
+      await tester.pumpAndSettle();
+
+      // الحلقة 1
+      await _generate(tester);
+      expect(find.textContaining('حلقة 1'), findsOneWidget);
+      final s1 = (await AppStorage.searchScripts()).first;
+      expect(s1.seriesTitle, 'رحلتي مع البرمجة');
+      expect(s1.episode, 1);
+      expect(claude.prompt(claude.requests.length - 1), isNot(contains('هذا جزء من سلسلة')));
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      // الحلقة 2 — نختارو السلسلة الموجودة
+      await _tap(tester, find.byType(DropdownButtonFormField<String?>));
+      await _tap(tester, find.text('📺 رحلتي مع البرمجة').last);
+      await tester.pumpAndSettle();
+      await _generate(tester);
+      expect(find.textContaining('حلقة 2'), findsOneWidget);
+      final s2 = (await AppStorage.searchScripts()).first;
+      expect(s2.episode, 2);
+      // الطلب الثاني فيه سياق الحلقة 1
+      final prompt2 = claude.prompt(claude.requests.length - 1);
+      expect(prompt2, contains('هذا جزء من سلسلة'));
+      expect(prompt2, contains('الحلقة 1'));
+    }, () => claude.client);
+  });
+
   group('أخطاء الـAPI تبان بالدارجة', () {
     final cases = <String, (http.Response Function(String), String)>{
       '401': ((_) => _claudeReply('', status: 401),

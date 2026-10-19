@@ -16,6 +16,7 @@ class Prompts {
     required String idea,
     required String style,
     required int duration,
+    String seriesContext = '',
   }) =>
       '''$rules
 
@@ -24,7 +25,11 @@ class Prompts {
 - الفكرة: ${idea.isEmpty ? 'إختار إنت فكرة قوية وبسيطة تناسب مبتدئ' : idea}
 - طريقة الظهور: $style
 - المدّة: $duration ثانية بالضبط، format 9:16
-
+${seriesContext.isEmpty ? '' : '''
+هذا جزء من سلسلة حلقات متواصلة. الحلقات اللي فاتت:
+$seriesContext
+كمّل القصّة في هالحلقة الجديدة: ما تعاودش نفس الكلام، خلّي ربط واضح مع اللي فات (مثلا «في الحلقة اللي فاتت...»)، وخلّي الآخر يشوّق للحلقة الجاية.
+'''}
 جاوب بـJSON برك، بلا أي كلام آخر وبلا backticks، بالشكل هذا:
 {
  "title": "عنوان الفيديو",

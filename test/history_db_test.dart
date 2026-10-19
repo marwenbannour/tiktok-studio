@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiktok_studio/db/database.dart';
@@ -5,7 +6,8 @@ import 'package:tiktok_studio/db/database.dart';
 void main() {
   late AppDatabase db;
 
-  ScriptsCompanion row(String title, String cat, {int dur = 20, int? created, String content = ''}) =>
+  ScriptsCompanion row(String title, String cat,
+          {int dur = 20, int? created, String content = '', String? series, int? ep}) =>
       ScriptsCompanion.insert(
         title: title,
         category: cat,
@@ -13,6 +15,8 @@ void main() {
         duration: dur,
         content: content.isEmpty ? '{"voice":"$title"}' : content,
         createdAt: created ?? DateTime.now().microsecondsSinceEpoch,
+        seriesTitle: Value(series),
+        episode: Value(ep),
       );
 
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
@@ -107,6 +111,24 @@ void main() {
     // مسح الإحصائيات
     await db.setStats(a, null, null, null);
     expect((await db.byId(a))!.views, isNull);
+  });
+
+  test('V2: السلاسل (épisodes)', () async {
+    await db.add(row('عادي', 'Dev AI')); // بلا سلسلة
+    expect(await db.seriesTitles(), isEmpty);
+    expect(await db.nextEpisode('رحلتي'), 1); // سلسلة جديدة → الحلقة 1
+
+    await db.add(row('ح1', 'Dev AI', series: 'رحلتي', ep: 1));
+    await db.add(row('ح2', 'Dev AI', series: 'رحلتي', ep: 2));
+    await db.add(row('أخرى', 'Football', series: 'كورة', ep: 1));
+
+    expect((await db.seriesTitles())..sort(), ['رحلتي', 'كورة']);
+    expect(await db.nextEpisode('رحلتي'), 3); // 2 حلقات → الجاية 3
+    expect(await db.nextEpisode('كورة'), 2);
+
+    final eps = await db.seriesEpisodes('رحلتي');
+    expect(eps.map((e) => e.episode), [1, 2]); // مرتّبين
+    expect(eps.first.title, 'ح1');
   });
 
   test('تعديل المحتوى + فسخ + byCreatedAt', () async {

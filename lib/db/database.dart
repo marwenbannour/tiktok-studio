@@ -24,6 +24,10 @@ class Scripts extends Table {
   IntColumn get views => integer().nullable()();
   IntColumn get likes => integer().nullable()();
   IntColumn get comments => integer().nullable()();
+
+  // ---- سلاسل الحلقات (V2) ----
+  TextColumn get seriesTitle => text().nullable()();
+  IntColumn get episode => integer().nullable()();
 }
 
 @DriftDatabase(tables: [Scripts])
@@ -39,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,6 +52,10 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(scripts, scripts.views);
             await m.addColumn(scripts, scripts.likes);
             await m.addColumn(scripts, scripts.comments);
+          }
+          if (from < 3) {
+            await m.addColumn(scripts, scripts.seriesTitle);
+            await m.addColumn(scripts, scripts.episode);
           }
         },
       );
@@ -115,6 +123,29 @@ class AppDatabase extends _$AppDatabase {
       q.where((t) => t.title.like(like) | t.content.like(like));
     }
     return q.get();
+  }
+
+  // ---- السلاسل (V2) ----
+  Future<List<String>> seriesTitles() async {
+    final q = selectOnly(scripts, distinct: true)
+      ..addColumns([scripts.seriesTitle])
+      ..where(scripts.seriesTitle.isNotNull());
+    final rows = await q.get();
+    return rows.map((r) => r.read(scripts.seriesTitle)).whereType<String>().toList();
+  }
+
+  Future<List<Script>> seriesEpisodes(String title) => (select(scripts)
+        ..where((t) => t.seriesTitle.equals(title))
+        ..orderBy([(t) => OrderingTerm.asc(t.episode)]))
+      .get();
+
+  Future<int> nextEpisode(String title) async {
+    final maxE = scripts.episode.max();
+    final q = selectOnly(scripts)
+      ..addColumns([maxE])
+      ..where(scripts.seriesTitle.equals(title));
+    final row = await q.getSingleOrNull();
+    return (row?.read(maxE) ?? 0) + 1;
   }
 
   Future<int> total() async {

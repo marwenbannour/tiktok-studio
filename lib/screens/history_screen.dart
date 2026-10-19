@@ -193,6 +193,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     child: Text('👁️ ${s.views}',
                                         style: const TextStyle(color: AppColors.cyan, fontSize: 12)),
                                   ),
+                                if (s.inSeries)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: Text('📺 ح${s.episode}',
+                                        style: const TextStyle(color: AppColors.cyan, fontSize: 12)),
+                                  ),
                               ],
                             ),
                             leading: IconButton(

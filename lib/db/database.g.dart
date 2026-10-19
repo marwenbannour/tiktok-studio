@@ -90,6 +90,18 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
   late final GeneratedColumn<int> comments = GeneratedColumn<int>(
       'comments', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _seriesTitleMeta =
+      const VerificationMeta('seriesTitle');
+  @override
+  late final GeneratedColumn<String> seriesTitle = GeneratedColumn<String>(
+      'series_title', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _episodeMeta =
+      const VerificationMeta('episode');
+  @override
+  late final GeneratedColumn<int> episode = GeneratedColumn<int>(
+      'episode', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -104,7 +116,9 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
         createdAt,
         views,
         likes,
-        comments
+        comments,
+        seriesTitle,
+        episode
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -183,6 +197,16 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
       context.handle(_commentsMeta,
           comments.isAcceptableOrUnknown(data['comments']!, _commentsMeta));
     }
+    if (data.containsKey('series_title')) {
+      context.handle(
+          _seriesTitleMeta,
+          seriesTitle.isAcceptableOrUnknown(
+              data['series_title']!, _seriesTitleMeta));
+    }
+    if (data.containsKey('episode')) {
+      context.handle(_episodeMeta,
+          episode.isAcceptableOrUnknown(data['episode']!, _episodeMeta));
+    }
     return context;
   }
 
@@ -218,6 +242,10 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
           .read(DriftSqlType.int, data['${effectivePrefix}likes']),
       comments: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}comments']),
+      seriesTitle: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}series_title']),
+      episode: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}episode']),
     );
   }
 
@@ -245,6 +273,8 @@ class Script extends DataClass implements Insertable<Script> {
   final int? views;
   final int? likes;
   final int? comments;
+  final String? seriesTitle;
+  final int? episode;
   const Script(
       {required this.id,
       required this.title,
@@ -258,7 +288,9 @@ class Script extends DataClass implements Insertable<Script> {
       required this.createdAt,
       this.views,
       this.likes,
-      this.comments});
+      this.comments,
+      this.seriesTitle,
+      this.episode});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -282,6 +314,12 @@ class Script extends DataClass implements Insertable<Script> {
     }
     if (!nullToAbsent || comments != null) {
       map['comments'] = Variable<int>(comments);
+    }
+    if (!nullToAbsent || seriesTitle != null) {
+      map['series_title'] = Variable<String>(seriesTitle);
+    }
+    if (!nullToAbsent || episode != null) {
+      map['episode'] = Variable<int>(episode);
     }
     return map;
   }
@@ -307,6 +345,12 @@ class Script extends DataClass implements Insertable<Script> {
       comments: comments == null && nullToAbsent
           ? const Value.absent()
           : Value(comments),
+      seriesTitle: seriesTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(seriesTitle),
+      episode: episode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(episode),
     );
   }
 
@@ -327,6 +371,8 @@ class Script extends DataClass implements Insertable<Script> {
       views: serializer.fromJson<int?>(json['views']),
       likes: serializer.fromJson<int?>(json['likes']),
       comments: serializer.fromJson<int?>(json['comments']),
+      seriesTitle: serializer.fromJson<String?>(json['seriesTitle']),
+      episode: serializer.fromJson<int?>(json['episode']),
     );
   }
   @override
@@ -346,6 +392,8 @@ class Script extends DataClass implements Insertable<Script> {
       'views': serializer.toJson<int?>(views),
       'likes': serializer.toJson<int?>(likes),
       'comments': serializer.toJson<int?>(comments),
+      'seriesTitle': serializer.toJson<String?>(seriesTitle),
+      'episode': serializer.toJson<int?>(episode),
     };
   }
 
@@ -362,7 +410,9 @@ class Script extends DataClass implements Insertable<Script> {
           int? createdAt,
           Value<int?> views = const Value.absent(),
           Value<int?> likes = const Value.absent(),
-          Value<int?> comments = const Value.absent()}) =>
+          Value<int?> comments = const Value.absent(),
+          Value<String?> seriesTitle = const Value.absent(),
+          Value<int?> episode = const Value.absent()}) =>
       Script(
         id: id ?? this.id,
         title: title ?? this.title,
@@ -377,6 +427,8 @@ class Script extends DataClass implements Insertable<Script> {
         views: views.present ? views.value : this.views,
         likes: likes.present ? likes.value : this.likes,
         comments: comments.present ? comments.value : this.comments,
+        seriesTitle: seriesTitle.present ? seriesTitle.value : this.seriesTitle,
+        episode: episode.present ? episode.value : this.episode,
       );
   Script copyWithCompanion(ScriptsCompanion data) {
     return Script(
@@ -395,6 +447,9 @@ class Script extends DataClass implements Insertable<Script> {
       views: data.views.present ? data.views.value : this.views,
       likes: data.likes.present ? data.likes.value : this.likes,
       comments: data.comments.present ? data.comments.value : this.comments,
+      seriesTitle:
+          data.seriesTitle.present ? data.seriesTitle.value : this.seriesTitle,
+      episode: data.episode.present ? data.episode.value : this.episode,
     );
   }
 
@@ -413,14 +468,30 @@ class Script extends DataClass implements Insertable<Script> {
           ..write('createdAt: $createdAt, ')
           ..write('views: $views, ')
           ..write('likes: $likes, ')
-          ..write('comments: $comments')
+          ..write('comments: $comments, ')
+          ..write('seriesTitle: $seriesTitle, ')
+          ..write('episode: $episode')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, title, category, style, duration, content,
-      model, isFavorite, publishedAt, createdAt, views, likes, comments);
+  int get hashCode => Object.hash(
+      id,
+      title,
+      category,
+      style,
+      duration,
+      content,
+      model,
+      isFavorite,
+      publishedAt,
+      createdAt,
+      views,
+      likes,
+      comments,
+      seriesTitle,
+      episode);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -437,7 +508,9 @@ class Script extends DataClass implements Insertable<Script> {
           other.createdAt == this.createdAt &&
           other.views == this.views &&
           other.likes == this.likes &&
-          other.comments == this.comments);
+          other.comments == this.comments &&
+          other.seriesTitle == this.seriesTitle &&
+          other.episode == this.episode);
 }
 
 class ScriptsCompanion extends UpdateCompanion<Script> {
@@ -454,6 +527,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
   final Value<int?> views;
   final Value<int?> likes;
   final Value<int?> comments;
+  final Value<String?> seriesTitle;
+  final Value<int?> episode;
   const ScriptsCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -468,6 +543,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     this.views = const Value.absent(),
     this.likes = const Value.absent(),
     this.comments = const Value.absent(),
+    this.seriesTitle = const Value.absent(),
+    this.episode = const Value.absent(),
   });
   ScriptsCompanion.insert({
     this.id = const Value.absent(),
@@ -483,6 +560,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     this.views = const Value.absent(),
     this.likes = const Value.absent(),
     this.comments = const Value.absent(),
+    this.seriesTitle = const Value.absent(),
+    this.episode = const Value.absent(),
   })  : title = Value(title),
         category = Value(category),
         style = Value(style),
@@ -503,6 +582,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     Expression<int>? views,
     Expression<int>? likes,
     Expression<int>? comments,
+    Expression<String>? seriesTitle,
+    Expression<int>? episode,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -518,6 +599,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       if (views != null) 'views': views,
       if (likes != null) 'likes': likes,
       if (comments != null) 'comments': comments,
+      if (seriesTitle != null) 'series_title': seriesTitle,
+      if (episode != null) 'episode': episode,
     });
   }
 
@@ -534,7 +617,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       Value<int>? createdAt,
       Value<int?>? views,
       Value<int?>? likes,
-      Value<int?>? comments}) {
+      Value<int?>? comments,
+      Value<String?>? seriesTitle,
+      Value<int?>? episode}) {
     return ScriptsCompanion(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -549,6 +634,8 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       views: views ?? this.views,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
+      seriesTitle: seriesTitle ?? this.seriesTitle,
+      episode: episode ?? this.episode,
     );
   }
 
@@ -594,6 +681,12 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     if (comments.present) {
       map['comments'] = Variable<int>(comments.value);
     }
+    if (seriesTitle.present) {
+      map['series_title'] = Variable<String>(seriesTitle.value);
+    }
+    if (episode.present) {
+      map['episode'] = Variable<int>(episode.value);
+    }
     return map;
   }
 
@@ -612,7 +705,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
           ..write('createdAt: $createdAt, ')
           ..write('views: $views, ')
           ..write('likes: $likes, ')
-          ..write('comments: $comments')
+          ..write('comments: $comments, ')
+          ..write('seriesTitle: $seriesTitle, ')
+          ..write('episode: $episode')
           ..write(')'))
         .toString();
   }
@@ -643,6 +738,8 @@ typedef $$ScriptsTableCreateCompanionBuilder = ScriptsCompanion Function({
   Value<int?> views,
   Value<int?> likes,
   Value<int?> comments,
+  Value<String?> seriesTitle,
+  Value<int?> episode,
 });
 typedef $$ScriptsTableUpdateCompanionBuilder = ScriptsCompanion Function({
   Value<int> id,
@@ -658,6 +755,8 @@ typedef $$ScriptsTableUpdateCompanionBuilder = ScriptsCompanion Function({
   Value<int?> views,
   Value<int?> likes,
   Value<int?> comments,
+  Value<String?> seriesTitle,
+  Value<int?> episode,
 });
 
 class $$ScriptsTableFilterComposer
@@ -707,6 +806,12 @@ class $$ScriptsTableFilterComposer
 
   ColumnFilters<int> get comments => $composableBuilder(
       column: $table.comments, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get seriesTitle => $composableBuilder(
+      column: $table.seriesTitle, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get episode => $composableBuilder(
+      column: $table.episode, builder: (column) => ColumnFilters(column));
 }
 
 class $$ScriptsTableOrderingComposer
@@ -756,6 +861,12 @@ class $$ScriptsTableOrderingComposer
 
   ColumnOrderings<int> get comments => $composableBuilder(
       column: $table.comments, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get seriesTitle => $composableBuilder(
+      column: $table.seriesTitle, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get episode => $composableBuilder(
+      column: $table.episode, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ScriptsTableAnnotationComposer
@@ -805,6 +916,12 @@ class $$ScriptsTableAnnotationComposer
 
   GeneratedColumn<int> get comments =>
       $composableBuilder(column: $table.comments, builder: (column) => column);
+
+  GeneratedColumn<String> get seriesTitle => $composableBuilder(
+      column: $table.seriesTitle, builder: (column) => column);
+
+  GeneratedColumn<int> get episode =>
+      $composableBuilder(column: $table.episode, builder: (column) => column);
 }
 
 class $$ScriptsTableTableManager extends RootTableManager<
@@ -843,6 +960,8 @@ class $$ScriptsTableTableManager extends RootTableManager<
             Value<int?> views = const Value.absent(),
             Value<int?> likes = const Value.absent(),
             Value<int?> comments = const Value.absent(),
+            Value<String?> seriesTitle = const Value.absent(),
+            Value<int?> episode = const Value.absent(),
           }) =>
               ScriptsCompanion(
             id: id,
@@ -858,6 +977,8 @@ class $$ScriptsTableTableManager extends RootTableManager<
             views: views,
             likes: likes,
             comments: comments,
+            seriesTitle: seriesTitle,
+            episode: episode,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -873,6 +994,8 @@ class $$ScriptsTableTableManager extends RootTableManager<
             Value<int?> views = const Value.absent(),
             Value<int?> likes = const Value.absent(),
             Value<int?> comments = const Value.absent(),
+            Value<String?> seriesTitle = const Value.absent(),
+            Value<int?> episode = const Value.absent(),
           }) =>
               ScriptsCompanion.insert(
             id: id,
@@ -888,6 +1011,8 @@ class $$ScriptsTableTableManager extends RootTableManager<
             views: views,
             likes: likes,
             comments: comments,
+            seriesTitle: seriesTitle,
+            episode: episode,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (
