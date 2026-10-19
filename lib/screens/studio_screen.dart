@@ -37,6 +37,20 @@ class _StudioScreenState extends State<StudioScreen> {
   bool _loading = false;
   bool _loadingIdeas = false;
   List<String> _ideas = [];
+  ({String category, double avgViews, int count})? _best; // نصيحة V2
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInsight();
+  }
+
+  Future<void> _loadInsight() async {
+    try {
+      final b = await AppStorage.bestCategory();
+      if (mounted) setState(() => _best = b);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -91,9 +105,10 @@ class _StudioScreenState extends State<StudioScreen> {
       final saved = await AppStorage.saveScript(script);
       await AppStorage.incrementGenCount(); // F20
       if (!mounted) return;
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => ResultScreen(script: saved)),
       );
+      _loadInsight(); // يمكن دخّل إحصائيات في شاشة النتيجة
     } catch (e) {
       _snack(errorMessage(e));
     } finally {
@@ -166,6 +181,29 @@ class _StudioScreenState extends State<StudioScreen> {
               ],
             ),
           ),
+          if (_best != null)
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.cyan.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Text('📈', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '«${_categories[_best!.category] ?? _best!.category}» يخدم مليح عندك — '
+                      'متوسّط ${_best!.avgViews.round()} مشاهدة. جرّب تزيد منّو!',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           _label('نوع المحتوى'),
           _chips(_categories, _category, (v) => _category = v),
           _label('الفكرة (اختياري)'),

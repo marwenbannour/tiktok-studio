@@ -19,6 +19,11 @@ class Scripts extends Table {
   /// وقت النشر على TikTok (null = ما تنشرش)
   IntColumn get publishedAt => integer().nullable()();
   IntColumn get createdAt => integer()();
+
+  // ---- إحصائيات الفيديو (V2) — تتدخّل بيدّ المستعمل بعد النشر ----
+  IntColumn get views => integer().nullable()();
+  IntColumn get likes => integer().nullable()();
+  IntColumn get comments => integer().nullable()();
 }
 
 @DriftDatabase(tables: [Scripts])
@@ -34,7 +39,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(scripts, scripts.views);
+            await m.addColumn(scripts, scripts.likes);
+            await m.addColumn(scripts, scripts.comments);
+          }
+        },
+      );
 
   // ---- كتابة ----
   Future<int> add(ScriptsCompanion c) => into(scripts).insert(c);
@@ -50,6 +66,31 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updateContent(int id, String title, String content) =>
       (update(scripts)..where((t) => t.id.equals(id)))
           .write(ScriptsCompanion(title: Value(title), content: Value(content)));
+
+  Future<void> setStats(int id, int? views, int? likes, int? comments) =>
+      (update(scripts)..where((t) => t.id.equals(id))).write(ScriptsCompanion(
+        views: Value(views),
+        likes: Value(likes),
+        comments: Value(comments),
+      ));
+
+  /// النوع اللي يخدم أكثر (أعلى متوسّط مشاهدات) من بين اللي عندهم إحصائيات
+  Future<({String category, double avgViews, int count})?> bestCategory() async {
+    final avg = scripts.views.avg();
+    final cnt = scripts.id.count();
+    final q = selectOnly(scripts)
+      ..addColumns([scripts.category, avg, cnt])
+      ..where(scripts.views.isNotNull())
+      ..groupBy([scripts.category])
+      ..orderBy([OrderingTerm.desc(avg)])
+      ..limit(1);
+    final row = await q.getSingleOrNull();
+    if (row == null) return null;
+    final a = row.read(avg);
+    final c = row.read(scripts.category);
+    if (a == null || c == null) return null;
+    return (category: c, avgViews: a, count: row.read(cnt) ?? 0);
+  }
 
   // ---- قراية ----
   Future<Script?> byId(int id) =>

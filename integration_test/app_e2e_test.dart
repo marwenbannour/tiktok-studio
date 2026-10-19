@@ -641,6 +641,35 @@ void main() {
     }, () => claude.client);
   });
 
+  testWidgets('إحصائيات الفيديو + نصيحة أحسن نوع (V2)', (tester) async {
+    await http.runWithClient(() async {
+      await _launch(tester);
+      await _saveKey(tester, _fakeKey);
+      await _generate(tester); // سكريبت Football "سرّ الضغط العالي"
+
+      // دخّل إحصائيات عبر المنيو
+      await _tap(tester, find.byTooltip('المزيد'));
+      await _tap(tester, find.text('📊 إحصائيات الفيديو'));
+      await tester.enterText(find.widgetWithText(TextField, 'مشاهدات'), '1500');
+      await tester.enterText(find.widgetWithText(TextField, 'لايكات'), '200');
+      await _tap(tester, find.widgetWithText(FilledButton, 'سجّل'));
+      await _waitFor(tester, find.text('تسجّلت الإحصائيات 📊'));
+
+      // الأرقام تبان (fmtNum: 1500 → 1.5K)
+      expect(find.text('1.5K'), findsOneWidget);
+      expect(find.text('200'), findsOneWidget);
+
+      final saved = (await AppStorage.searchScripts()).first;
+      expect(saved.views, 1500);
+      expect(saved.likes, 200);
+
+      // نرجعو لحضّر → نصيحة أحسن نوع تبان
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _waitFor(tester, find.textContaining('يخدم مليح عندك'));
+    }, () => claude.client);
+  });
+
   group('أخطاء الـAPI تبان بالدارجة', () {
     final cases = <String, (http.Response Function(String), String)>{
       '401': ((_) => _claudeReply('', status: 401),

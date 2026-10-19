@@ -100,7 +100,15 @@ class AppStorage {
       'style': r.style,
       'duration': r.duration,
       'createdAt': r.createdAt,
-    }).copyWith(dbId: r.id, isFavorite: r.isFavorite, publishedAt: r.publishedAt);
+    }).copyWith(
+      dbId: r.id,
+      isFavorite: r.isFavorite,
+      publishedAt: r.publishedAt,
+      setStats: true,
+      views: r.views,
+      likes: r.likes,
+      comments: r.comments,
+    );
   }
 
   /// بحث + فلترة حسب النوع + مفضّلة برك (F21, F22, F23)
@@ -142,6 +150,14 @@ class AppStorage {
   static Future<void> setFavorite(int dbId, bool fav) => _db.setFavorite(dbId, fav);
 
   static Future<void> setPublished(int dbId, int? ts) => _db.setPublished(dbId, ts);
+
+  // ---- إحصائيات الفيديو (V2) ----
+  static Future<void> setStats(int dbId, int? views, int? likes, int? comments) =>
+      _db.setStats(dbId, views, likes, comments);
+
+  /// النوع اللي يخدم أكثر (لتوجيه المواضيع الجاية)
+  static Future<({String category, double avgViews, int count})?> bestCategory() =>
+      _db.bestCategory();
 
   static Future<VideoScript?> findScript(int createdAt) async {
     final r = await _db.byCreatedAt(createdAt);

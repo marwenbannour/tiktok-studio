@@ -187,6 +187,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     padding: EdgeInsets.only(right: 6),
                                     child: Text('✅ تنشر', style: TextStyle(color: AppColors.success, fontSize: 12)),
                                   ),
+                                if (s.views != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: Text('👁️ ${s.views}',
+                                        style: const TextStyle(color: AppColors.cyan, fontSize: 12)),
+                                  ),
                               ],
                             ),
                             leading: IconButton(

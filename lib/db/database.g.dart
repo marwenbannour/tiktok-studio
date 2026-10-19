@@ -74,6 +74,22 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
   late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
       'created_at', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _viewsMeta = const VerificationMeta('views');
+  @override
+  late final GeneratedColumn<int> views = GeneratedColumn<int>(
+      'views', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _likesMeta = const VerificationMeta('likes');
+  @override
+  late final GeneratedColumn<int> likes = GeneratedColumn<int>(
+      'likes', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _commentsMeta =
+      const VerificationMeta('comments');
+  @override
+  late final GeneratedColumn<int> comments = GeneratedColumn<int>(
+      'comments', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -85,7 +101,10 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
         model,
         isFavorite,
         publishedAt,
-        createdAt
+        createdAt,
+        views,
+        likes,
+        comments
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -152,6 +171,18 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('views')) {
+      context.handle(
+          _viewsMeta, views.isAcceptableOrUnknown(data['views']!, _viewsMeta));
+    }
+    if (data.containsKey('likes')) {
+      context.handle(
+          _likesMeta, likes.isAcceptableOrUnknown(data['likes']!, _likesMeta));
+    }
+    if (data.containsKey('comments')) {
+      context.handle(_commentsMeta,
+          comments.isAcceptableOrUnknown(data['comments']!, _commentsMeta));
+    }
     return context;
   }
 
@@ -181,6 +212,12 @@ class $ScriptsTable extends Scripts with TableInfo<$ScriptsTable, Script> {
           .read(DriftSqlType.int, data['${effectivePrefix}published_at']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}created_at'])!,
+      views: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}views']),
+      likes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}likes']),
+      comments: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}comments']),
     );
   }
 
@@ -205,6 +242,9 @@ class Script extends DataClass implements Insertable<Script> {
   /// وقت النشر على TikTok (null = ما تنشرش)
   final int? publishedAt;
   final int createdAt;
+  final int? views;
+  final int? likes;
+  final int? comments;
   const Script(
       {required this.id,
       required this.title,
@@ -215,7 +255,10 @@ class Script extends DataClass implements Insertable<Script> {
       required this.model,
       required this.isFavorite,
       this.publishedAt,
-      required this.createdAt});
+      required this.createdAt,
+      this.views,
+      this.likes,
+      this.comments});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -231,6 +274,15 @@ class Script extends DataClass implements Insertable<Script> {
       map['published_at'] = Variable<int>(publishedAt);
     }
     map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || views != null) {
+      map['views'] = Variable<int>(views);
+    }
+    if (!nullToAbsent || likes != null) {
+      map['likes'] = Variable<int>(likes);
+    }
+    if (!nullToAbsent || comments != null) {
+      map['comments'] = Variable<int>(comments);
+    }
     return map;
   }
 
@@ -248,6 +300,13 @@ class Script extends DataClass implements Insertable<Script> {
           ? const Value.absent()
           : Value(publishedAt),
       createdAt: Value(createdAt),
+      views:
+          views == null && nullToAbsent ? const Value.absent() : Value(views),
+      likes:
+          likes == null && nullToAbsent ? const Value.absent() : Value(likes),
+      comments: comments == null && nullToAbsent
+          ? const Value.absent()
+          : Value(comments),
     );
   }
 
@@ -265,6 +324,9 @@ class Script extends DataClass implements Insertable<Script> {
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
       publishedAt: serializer.fromJson<int?>(json['publishedAt']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
+      views: serializer.fromJson<int?>(json['views']),
+      likes: serializer.fromJson<int?>(json['likes']),
+      comments: serializer.fromJson<int?>(json['comments']),
     );
   }
   @override
@@ -281,6 +343,9 @@ class Script extends DataClass implements Insertable<Script> {
       'isFavorite': serializer.toJson<bool>(isFavorite),
       'publishedAt': serializer.toJson<int?>(publishedAt),
       'createdAt': serializer.toJson<int>(createdAt),
+      'views': serializer.toJson<int?>(views),
+      'likes': serializer.toJson<int?>(likes),
+      'comments': serializer.toJson<int?>(comments),
     };
   }
 
@@ -294,7 +359,10 @@ class Script extends DataClass implements Insertable<Script> {
           String? model,
           bool? isFavorite,
           Value<int?> publishedAt = const Value.absent(),
-          int? createdAt}) =>
+          int? createdAt,
+          Value<int?> views = const Value.absent(),
+          Value<int?> likes = const Value.absent(),
+          Value<int?> comments = const Value.absent()}) =>
       Script(
         id: id ?? this.id,
         title: title ?? this.title,
@@ -306,6 +374,9 @@ class Script extends DataClass implements Insertable<Script> {
         isFavorite: isFavorite ?? this.isFavorite,
         publishedAt: publishedAt.present ? publishedAt.value : this.publishedAt,
         createdAt: createdAt ?? this.createdAt,
+        views: views.present ? views.value : this.views,
+        likes: likes.present ? likes.value : this.likes,
+        comments: comments.present ? comments.value : this.comments,
       );
   Script copyWithCompanion(ScriptsCompanion data) {
     return Script(
@@ -321,6 +392,9 @@ class Script extends DataClass implements Insertable<Script> {
       publishedAt:
           data.publishedAt.present ? data.publishedAt.value : this.publishedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      views: data.views.present ? data.views.value : this.views,
+      likes: data.likes.present ? data.likes.value : this.likes,
+      comments: data.comments.present ? data.comments.value : this.comments,
     );
   }
 
@@ -336,14 +410,17 @@ class Script extends DataClass implements Insertable<Script> {
           ..write('model: $model, ')
           ..write('isFavorite: $isFavorite, ')
           ..write('publishedAt: $publishedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('views: $views, ')
+          ..write('likes: $likes, ')
+          ..write('comments: $comments')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, title, category, style, duration, content,
-      model, isFavorite, publishedAt, createdAt);
+      model, isFavorite, publishedAt, createdAt, views, likes, comments);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -357,7 +434,10 @@ class Script extends DataClass implements Insertable<Script> {
           other.model == this.model &&
           other.isFavorite == this.isFavorite &&
           other.publishedAt == this.publishedAt &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.views == this.views &&
+          other.likes == this.likes &&
+          other.comments == this.comments);
 }
 
 class ScriptsCompanion extends UpdateCompanion<Script> {
@@ -371,6 +451,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
   final Value<bool> isFavorite;
   final Value<int?> publishedAt;
   final Value<int> createdAt;
+  final Value<int?> views;
+  final Value<int?> likes;
+  final Value<int?> comments;
   const ScriptsCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -382,6 +465,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     this.isFavorite = const Value.absent(),
     this.publishedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.views = const Value.absent(),
+    this.likes = const Value.absent(),
+    this.comments = const Value.absent(),
   });
   ScriptsCompanion.insert({
     this.id = const Value.absent(),
@@ -394,6 +480,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     this.isFavorite = const Value.absent(),
     this.publishedAt = const Value.absent(),
     required int createdAt,
+    this.views = const Value.absent(),
+    this.likes = const Value.absent(),
+    this.comments = const Value.absent(),
   })  : title = Value(title),
         category = Value(category),
         style = Value(style),
@@ -411,6 +500,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     Expression<bool>? isFavorite,
     Expression<int>? publishedAt,
     Expression<int>? createdAt,
+    Expression<int>? views,
+    Expression<int>? likes,
+    Expression<int>? comments,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -423,6 +515,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       if (isFavorite != null) 'is_favorite': isFavorite,
       if (publishedAt != null) 'published_at': publishedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (views != null) 'views': views,
+      if (likes != null) 'likes': likes,
+      if (comments != null) 'comments': comments,
     });
   }
 
@@ -436,7 +531,10 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       Value<String>? model,
       Value<bool>? isFavorite,
       Value<int?>? publishedAt,
-      Value<int>? createdAt}) {
+      Value<int>? createdAt,
+      Value<int?>? views,
+      Value<int?>? likes,
+      Value<int?>? comments}) {
     return ScriptsCompanion(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -448,6 +546,9 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
       isFavorite: isFavorite ?? this.isFavorite,
       publishedAt: publishedAt ?? this.publishedAt,
       createdAt: createdAt ?? this.createdAt,
+      views: views ?? this.views,
+      likes: likes ?? this.likes,
+      comments: comments ?? this.comments,
     );
   }
 
@@ -484,6 +585,15 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
+    if (views.present) {
+      map['views'] = Variable<int>(views.value);
+    }
+    if (likes.present) {
+      map['likes'] = Variable<int>(likes.value);
+    }
+    if (comments.present) {
+      map['comments'] = Variable<int>(comments.value);
+    }
     return map;
   }
 
@@ -499,7 +609,10 @@ class ScriptsCompanion extends UpdateCompanion<Script> {
           ..write('model: $model, ')
           ..write('isFavorite: $isFavorite, ')
           ..write('publishedAt: $publishedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('views: $views, ')
+          ..write('likes: $likes, ')
+          ..write('comments: $comments')
           ..write(')'))
         .toString();
   }
@@ -527,6 +640,9 @@ typedef $$ScriptsTableCreateCompanionBuilder = ScriptsCompanion Function({
   Value<bool> isFavorite,
   Value<int?> publishedAt,
   required int createdAt,
+  Value<int?> views,
+  Value<int?> likes,
+  Value<int?> comments,
 });
 typedef $$ScriptsTableUpdateCompanionBuilder = ScriptsCompanion Function({
   Value<int> id,
@@ -539,6 +655,9 @@ typedef $$ScriptsTableUpdateCompanionBuilder = ScriptsCompanion Function({
   Value<bool> isFavorite,
   Value<int?> publishedAt,
   Value<int> createdAt,
+  Value<int?> views,
+  Value<int?> likes,
+  Value<int?> comments,
 });
 
 class $$ScriptsTableFilterComposer
@@ -579,6 +698,15 @@ class $$ScriptsTableFilterComposer
 
   ColumnFilters<int> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get views => $composableBuilder(
+      column: $table.views, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get likes => $composableBuilder(
+      column: $table.likes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get comments => $composableBuilder(
+      column: $table.comments, builder: (column) => ColumnFilters(column));
 }
 
 class $$ScriptsTableOrderingComposer
@@ -619,6 +747,15 @@ class $$ScriptsTableOrderingComposer
 
   ColumnOrderings<int> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get views => $composableBuilder(
+      column: $table.views, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get likes => $composableBuilder(
+      column: $table.likes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get comments => $composableBuilder(
+      column: $table.comments, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ScriptsTableAnnotationComposer
@@ -659,6 +796,15 @@ class $$ScriptsTableAnnotationComposer
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get views =>
+      $composableBuilder(column: $table.views, builder: (column) => column);
+
+  GeneratedColumn<int> get likes =>
+      $composableBuilder(column: $table.likes, builder: (column) => column);
+
+  GeneratedColumn<int> get comments =>
+      $composableBuilder(column: $table.comments, builder: (column) => column);
 }
 
 class $$ScriptsTableTableManager extends RootTableManager<
@@ -694,6 +840,9 @@ class $$ScriptsTableTableManager extends RootTableManager<
             Value<bool> isFavorite = const Value.absent(),
             Value<int?> publishedAt = const Value.absent(),
             Value<int> createdAt = const Value.absent(),
+            Value<int?> views = const Value.absent(),
+            Value<int?> likes = const Value.absent(),
+            Value<int?> comments = const Value.absent(),
           }) =>
               ScriptsCompanion(
             id: id,
@@ -706,6 +855,9 @@ class $$ScriptsTableTableManager extends RootTableManager<
             isFavorite: isFavorite,
             publishedAt: publishedAt,
             createdAt: createdAt,
+            views: views,
+            likes: likes,
+            comments: comments,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -718,6 +870,9 @@ class $$ScriptsTableTableManager extends RootTableManager<
             Value<bool> isFavorite = const Value.absent(),
             Value<int?> publishedAt = const Value.absent(),
             required int createdAt,
+            Value<int?> views = const Value.absent(),
+            Value<int?> likes = const Value.absent(),
+            Value<int?> comments = const Value.absent(),
           }) =>
               ScriptsCompanion.insert(
             id: id,
@@ -730,6 +885,9 @@ class $$ScriptsTableTableManager extends RootTableManager<
             isFavorite: isFavorite,
             publishedAt: publishedAt,
             createdAt: createdAt,
+            views: views,
+            likes: likes,
+            comments: comments,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (

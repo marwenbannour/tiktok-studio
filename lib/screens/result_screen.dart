@@ -8,6 +8,7 @@ import '../storage.dart';
 import '../theme.dart';
 import 'plan_editor.dart';
 import 'segment_editor.dart';
+import 'stats_editor.dart';
 import 'teleprompter_screen.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -52,11 +53,24 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   void _onMenu(String what) {
-    if (what == 'publish') {
-      _togglePublished();
-    } else {
-      _share(what);
+    switch (what) {
+      case 'publish':
+        _togglePublished();
+      case 'stats':
+        _editStats();
+      default:
+        _share(what);
     }
+  }
+
+  Future<void> _editStats() async {
+    if (script.dbId == null) return;
+    final s = await editStats(context, script);
+    if (s == null || !mounted) return;
+    setState(() => script =
+        script.copyWith(setStats: true, views: s.views, likes: s.likes, comments: s.comments));
+    await AppStorage.setStats(script.dbId!, s.views, s.likes, s.comments);
+    _snack('تسجّلت الإحصائيات 📊');
   }
 
   Future<void> _share(String what) async {
@@ -128,6 +142,8 @@ class _ResultScreenState extends State<ResultScreen> {
                 PopupMenuItem(
                     value: 'publish',
                     child: Text(script.publishedAt == null ? '✅ علّم كتنشر' : '↩️ شيل وسم النشر')),
+              if (script.dbId != null)
+                const PopupMenuItem(value: 'stats', child: Text('📊 إحصائيات الفيديو')),
             ],
           ),
         ],
@@ -251,10 +267,46 @@ class _ResultScreenState extends State<ResultScreen> {
                     .toList(),
               ),
             ),
+
+          if (script.dbId != null)
+            _Section(
+              title: '📊 إحصائيات الفيديو',
+              action: TextButton(
+                  onPressed: _editStats, child: Text(script.hasStats ? 'بدّل' : 'دخّل')),
+              child: script.hasStats
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _stat('👁️', script.views),
+                        _stat('❤️', script.likes),
+                        _stat('💬', script.comments),
+                      ],
+                    )
+                  : Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text('بعد ما تنشر الفيديو، دخّل الأرقام هوني باش الـapp توصّيك بأحسن نوع.',
+                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    ),
+            ),
         ],
       ),
     );
   }
+
+  static String fmtNum(int v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return '$v';
+  }
+
+  Widget _stat(String emoji, int? v) => Column(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 4),
+          Text(v == null ? '—' : fmtNum(v),
+              style: Theme.of(context).textTheme.titleMedium),
+        ],
+      );
 }
 
 class _Section extends StatelessWidget {

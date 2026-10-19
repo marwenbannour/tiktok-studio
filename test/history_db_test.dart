@@ -86,6 +86,29 @@ void main() {
     expect((await db.byId(id))!.publishedAt, isNull);
   });
 
+  test('V2: الإحصائيات + أحسن نوع (bestCategory)', () async {
+    final a = await db.add(row('a', 'Dev AI'));
+    final b = await db.add(row('b', 'Football'));
+    final c = await db.add(row('c', 'Football'));
+    expect(await db.bestCategory(), isNull); // ما فماش إحصائيات بعد
+
+    await db.setStats(a, 100, 10, 5);
+    await db.setStats(b, 1000, 50, 20);
+    await db.setStats(c, 2000, 80, 30);
+
+    final best = await db.bestCategory();
+    expect(best!.category, 'Football'); // متوسّط 1500 > 100
+    expect(best.avgViews, 1500);
+    expect(best.count, 2);
+
+    expect((await db.byId(a))!.views, 100);
+    expect((await db.byId(c))!.likes, 80);
+
+    // مسح الإحصائيات
+    await db.setStats(a, null, null, null);
+    expect((await db.byId(a))!.views, isNull);
+  });
+
   test('تعديل المحتوى + فسخ + byCreatedAt', () async {
     final id = await db.add(row('قديم', 'Dev AI', created: 555));
     await db.updateContent(id, 'جديد', '{"voice":"محتوى جديد"}');

@@ -74,6 +74,11 @@ class VideoScript {
   final int? dbId;
   final bool isFavorite;
   final int? publishedAt;
+  final int? views;
+  final int? likes;
+  final int? comments;
+
+  bool get hasStats => views != null || likes != null || comments != null;
 
   const VideoScript({
     required this.title,
@@ -92,6 +97,9 @@ class VideoScript {
     this.dbId,
     this.isFavorite = false,
     this.publishedAt,
+    this.views,
+    this.likes,
+    this.comments,
   });
 
   factory VideoScript.fromJson(Map<String, dynamic> j) => VideoScript(
@@ -132,6 +140,10 @@ class VideoScript {
     bool? isFavorite,
     int? publishedAt,
     bool clearPublished = false,
+    int? views,
+    int? likes,
+    int? comments,
+    bool setStats = false,
   }) =>
       VideoScript(
         title: title,
@@ -150,6 +162,9 @@ class VideoScript {
         dbId: dbId ?? this.dbId,
         isFavorite: isFavorite ?? this.isFavorite,
         publishedAt: clearPublished ? null : (publishedAt ?? this.publishedAt),
+        views: setStats ? views : (views ?? this.views),
+        likes: setStats ? likes : (likes ?? this.likes),
+        comments: setStats ? comments : (comments ?? this.comments),
       );
 
   VideoScript withSegment(int index, Segment s) =>
