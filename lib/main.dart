@@ -40,6 +40,7 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   int _historyKey = 0;
   int _plansKey = 0;
+  int _settingsKey = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -50,16 +51,17 @@ class _HomeShellState extends State<HomeShell> {
           const StudioScreen(),
           HistoryScreen(key: ValueKey(_historyKey)),
           PlansScreen(key: ValueKey(_plansKey)),
-          const SettingsScreen(),
+          SettingsScreen(key: ValueKey(_settingsKey)),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() {
           _index = i;
-          // نعاودو نقراو (ينجمو يتبدّلو من شاشة النتيجة)
+          // نعاودو نقراو (ينجمو يتبدّلو من شاشة النتيجة/التوليد)
           if (i == 1) _historyKey++;
           if (i == 2) _plansKey++;
+          if (i == 3) _settingsKey++;
         }),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.movie_creation_outlined), label: 'حضّر'),

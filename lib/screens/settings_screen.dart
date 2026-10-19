@@ -12,8 +12,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _key = TextEditingController();
   final _custom = TextEditingController();
+  final _cap = TextEditingController();
   bool _obscure = true;
   String _model = AppStorage.defaultModel;
+  int _count = 0;
 
   @override
   void initState() {
@@ -24,12 +26,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final k = await AppStorage.getApiKey();
     final m = await AppStorage.getModel();
+    final cap = await AppStorage.getGenCap();
+    final count = await AppStorage.genCount();
     if (!mounted) return;
     setState(() {
       _key.text = k ?? '';
       _model = m;
       // إذا الموديل مش من القائمة، ورّيه في خانة «موديل آخر»
       if (!AppStorage.models.containsKey(m)) _custom.text = m;
+      _cap.text = cap == 0 ? '' : '$cap';
+      _count = count;
     });
   }
 
@@ -37,7 +43,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _key.dispose();
     _custom.dispose();
+    _cap.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveCap() async {
+    final cap = int.tryParse(_cap.text.trim()) ?? 0;
+    await AppStorage.setGenCap(cap);
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    _snack(cap == 0 ? 'تشال الحدّ الشهري.' : 'تسجّل الحدّ: $cap توليدة في الشهر ✅');
   }
 
   void _snack(String m) =>
@@ -156,6 +171,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold)),
             ),
+          const SizedBox(height: 28),
+          Text('الحدّ الشهري للتوليد', style: tt.titleMedium),
+          const SizedBox(height: 4),
+          Text('باش ما تخرجش على الميزانية متاعك. 0 ولا فارغ = بلا حدّ.',
+              style: tt.bodySmall),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cap,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    hintText: 'مثلا: 100',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    suffixText: 'توليدة/شهر',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(onPressed: _saveCap, child: const Text('سجّل')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('استعملت $_count هالشهر.',
+              style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
         ],
       ),
     );

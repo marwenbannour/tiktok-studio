@@ -614,6 +614,33 @@ void main() {
     }, () => claude.client);
   });
 
+  testWidgets('الحدّ الشهري يبلوكي التوليد (F20)', (tester) async {
+    await http.runWithClient(() async {
+      await AppStorage.setGenCap(1);
+      await _launch(tester);
+      await _saveKey(tester, _fakeKey);
+
+      // توليدة 1: تنجح
+      await _tap(tester, find.text('حضّرلي الفيديو'));
+      await _waitFor(tester, find.byType(ResultScreen));
+      await tester.pumpAndSettle();
+      expect(claude.requests, hasLength(1));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      // توليدة 2: تتبلوكي (ما تبعثش طلب جديد)
+      await _tap(tester, find.text('حضّرلي الفيديو'));
+      await _waitFor(tester, find.textContaining('وصلت الحدّ الشهري'));
+      expect(find.byType(ResultScreen), findsNothing);
+      expect(claude.requests, hasLength(1));
+
+      // الإعدادات تورّي الاستعمال
+      await _clearSnackBars(tester);
+      await _goTab(tester, 'الإعدادات');
+      await _waitFor(tester, find.text('استعملت 1 هالشهر.'));
+    }, () => claude.client);
+  });
+
   group('أخطاء الـAPI تبان بالدارجة', () {
     final cases = <String, (http.Response Function(String), String)>{
       '401': ((_) => _claudeReply('', status: 401),

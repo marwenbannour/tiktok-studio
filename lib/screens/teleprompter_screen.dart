@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models.dart';
 import '../widgets/prompter.dart';
@@ -20,10 +21,13 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
   void initState() {
     super.initState();
     _scroller.addListener(() => setState(() {}));
+    // F15: الشاشة تبقى محلولة وإنت تقرا/تسجّل
+    WakelockPlus.enable().catchError((_) {});
   }
 
   @override
   void dispose() {
+    WakelockPlus.disable().catchError((_) {});
     _scroller.dispose();
     super.dispose();
   }

@@ -58,6 +58,18 @@ class _StudioScreenState extends State<StudioScreen> {
   Future<void> _generate() async {
     final api = await _api();
     if (api == null) return;
+    // F20: الحدّ الشهري + تنبيه عند 80%
+    final cap = await AppStorage.getGenCap();
+    if (cap > 0) {
+      final count = await AppStorage.genCount();
+      if (count >= cap) {
+        _snack('وصلت الحدّ الشهري ($cap توليدة). بدّلو في «الإعدادات».');
+        return;
+      }
+      if (count >= (cap * 0.8).ceil()) {
+        _snack('⚠️ وصلت $count/$cap من الحدّ الشهري متاع هالشهر.');
+      }
+    }
     setState(() => _loading = true);
     try {
       final json = await api.askJson(Prompts.script(
@@ -77,6 +89,7 @@ class _StudioScreenState extends State<StudioScreen> {
         throw ClaudeException('الجواب جا ناقص. عاود جرّب.');
       }
       final saved = await AppStorage.saveScript(script);
+      await AppStorage.incrementGenCount(); // F20
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => ResultScreen(script: saved)),

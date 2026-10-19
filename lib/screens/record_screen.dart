@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models.dart';
 import '../widgets/prompter.dart';
@@ -33,12 +34,14 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scroller.addListener(() => setState(() {}));
+    WakelockPlus.enable().catchError((_) {}); // F15: الشاشة محلولة وقت التسجيل
     _setup();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable().catchError((_) {});
     _tick?.cancel();
     _scroller.dispose();
     _cam?.dispose();

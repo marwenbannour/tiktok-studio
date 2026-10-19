@@ -53,6 +53,42 @@ class AppStorage {
     await p.setString(_modelName, m);
   }
 
+  // ---- الحدّ الشهري للتوليد (F20) ----
+  static const _capName = 'gen_cap';
+  static const _countName = 'gen_count';
+  static const _monthName = 'gen_month';
+
+  static String _thisMonth() {
+    final n = DateTime.now();
+    return '${n.year}-${two(n.month)}';
+  }
+
+  /// الحدّ الشهري (0 = بلا حدّ)
+  static Future<int> getGenCap() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getInt(_capName) ?? 0;
+  }
+
+  static Future<void> setGenCap(int cap) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_capName, cap < 0 ? 0 : cap);
+  }
+
+  /// عدد التوليدات هالشهر (يرجع 0 كي يتبدّل الشهر)
+  static Future<int> genCount() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_monthName) == _thisMonth() ? (p.getInt(_countName) ?? 0) : 0;
+  }
+
+  static Future<int> incrementGenCount() async {
+    final p = await SharedPreferences.getInstance();
+    final month = _thisMonth();
+    final count = (p.getString(_monthName) == month ? (p.getInt(_countName) ?? 0) : 0) + 1;
+    await p.setString(_monthName, month);
+    await p.setInt(_countName, count);
+    return count;
+  }
+
   // ---- المحفوظات (SQLite / drift — بلا حدّ، مع بحث وفلترة) ----
   static AppDatabase get _db => AppDatabase.instance;
 
