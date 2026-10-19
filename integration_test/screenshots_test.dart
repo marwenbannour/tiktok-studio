@@ -1,0 +1,115 @@
+// يلتقط screenshots للـPlay Store. يشغّل:
+//   flutter drive --driver=test_driver/integration_test.dart \
+//     --target=integration_test/screenshots_test.dart -d emulator-5554
+// الصور تتسجّل في screenshots/
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:tiktok_studio/main.dart';
+import 'package:tiktok_studio/screens/result_screen.dart';
+import 'package:tiktok_studio/screens/studio_screen.dart';
+import 'package:tiktok_studio/storage.dart';
+
+const _ideas = ['AI يصلّح bug في الكود', 'كيفاش تبدا في البرمجة', 'أدوات AI تخدم بيك'];
+
+final _script = {
+  'title': 'AI لقى الـbug في ثانية! 🐛',
+  'hook_idea': 'كتبت function فيها غلطة… شوف كيفاش AI لقاها',
+  'segments': [
+    {'from': 0, 'to': 5, 'screen': 'الكود على الشاشة', 'text': 'الـbug هذا… تلقاه؟',
+     'voice': 'كتبت function بسيطة، أما فيها غلطة صغيرة…'},
+    {'from': 5, 'to': 12, 'screen': 'AI يحلّل الكود', 'text': 'AI: السطر 3 ❌',
+     'voice': 'سألت الـAI، وفي ثانية قاللي الغلطة وين بالضبط'},
+    {'from': 12, 'to': 20, 'screen': 'وجهي + الكود مصلّح', 'text': 'اكتب DEV 👨‍💻',
+     'voice': 'صلّحناه مع بعضنا. اكتبلي DEV في الكومنتارات تحب شرح أكثر'},
+  ],
+  'code': 'int somme(int a, int b) {\n  return a - b; // ❌ لازم a + b\n}',
+  'code_note': 'الغلطة: استعملنا - عوض +',
+  'steps': [
+    {'title': 'صوّر الشاشة', 'detail': 'سجّل الكود وإنت تكتبو'},
+    {'title': 'المونتاج', 'detail': 'CapCut، زيد زoom على السطر الغالط'},
+  ],
+  'caption': 'AI صلّحلي الـbug في ثانية ⚡ جرّبتوه؟',
+  'hashtags': ['#dev', '#coding', '#ai', '#تونس'],
+  'tips': ['ما تحطّش مفتاح سرّي في الكود وإنت تصوّر'],
+};
+
+void main() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final real = http.Client();
+
+  final mock = MockClient((req) async {
+    if (req.url.toString().contains('ollama.com')) {
+      final prompt = (jsonDecode(req.body)['messages'] as List).first['content'] as String;
+      final text = prompt.contains('اقترح 5 أفكار')
+          ? jsonEncode({'ideas': _ideas})
+          : jsonEncode(_script);
+      return http.Response.bytes(
+          utf8.encode(jsonEncode({'message': {'role': 'assistant', 'content': text}})), 200,
+          headers: {'content-type': 'application/json'});
+    }
+    // تمرير باقي الطلبات (خطوط Google) للشبكة الحقيقية
+    final s = await real.send(req);
+    final bytes = await s.stream.toBytes();
+    return http.Response.bytes(bytes, s.statusCode,
+        headers: s.headers, request: req, reasonPhrase: s.reasonPhrase);
+  });
+
+  Future<void> shot(WidgetTester t, String name) async {
+    await t.pumpAndSettle();
+    await binding.takeScreenshot(name);
+  }
+
+  Future<void> tapVisible(WidgetTester t, Finder f) async {
+    await t.ensureVisible(f);
+    await t.pumpAndSettle();
+    await t.tap(f);
+    await t.pumpAndSettle();
+  }
+
+  testWidgets('capture Play Store screenshots', (tester) async {
+    await http.runWithClient(() async {
+      await AppStorage.setApiKey('demo-key');
+      await AppStorage.setModel('gemma4:31b');
+
+      await tester.pumpWidget(const TikTokStudioApp());
+      await tester.pumpAndSettle(); // splash → home
+      await tester.pump(const Duration(seconds: 3)); // نستنّى الخطوط تتحمّل
+      await tester.pumpAndSettle();
+
+      await binding.convertFlutterSurfaceToImage();
+
+      // 1) شاشة حضّر (مع فكرة مكتوبة)
+      await tester.enterText(
+          find.descendant(of: find.byType(StudioScreen), matching: find.byType(TextField)),
+          'AI يصلّح bug في الكود متاعي');
+      await tester.pumpAndSettle();
+      await shot(tester, '1_create');
+
+      // 2) شاشة النتيجة (سكريبت)
+      await tapVisible(tester, find.text('حضّرلي الفيديو'));
+      for (var i = 0; i < 20 && find.byType(ResultScreen).evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      await tester.pumpAndSettle();
+      await shot(tester, '2_result');
+
+      // 3) المحفوظات
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.descendant(
+          of: find.byType(NavigationBar), matching: find.text('المحفوظات')));
+      await shot(tester, '3_history');
+
+      // 4) الإعدادات
+      await tapVisible(tester, find.descendant(
+          of: find.byType(NavigationBar), matching: find.text('الإعدادات')));
+      await shot(tester, '4_settings');
+    }, () => mock);
+  });
+}

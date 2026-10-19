@@ -357,7 +357,7 @@ void main() {
       await _launch(tester);
       await _saveKey(tester, _fakeKey);
       await _generate(tester);
-      expect(find.text('👆 اضغط على segment باش تبدّلو ولا Claude يعاود يكتبو'), findsOneWidget);
+      expect(find.text('👆 اضغط على segment باش تبدّلو ولا الـAI يعاود يكتبو'), findsOneWidget);
 
       // ---- بيدّك: الـhook ----
       await _tap(tester, find.text('تعرف علاش برشلونة تضغط؟'));

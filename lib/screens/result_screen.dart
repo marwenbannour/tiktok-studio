@@ -123,7 +123,7 @@ class _ResultScreenState extends State<ResultScreen> {
               children: [
                 for (var i = 0; i < script.segments.length; i++)
                   _SegmentTile(segment: script.segments[i], onTap: () => _editSegment(i)),
-                Text('👆 اضغط على segment باش تبدّلو ولا Claude يعاود يكتبو',
+                Text('👆 اضغط على segment باش تبدّلو ولا الـAI يعاود يكتبو',
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
