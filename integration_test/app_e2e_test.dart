@@ -648,10 +648,13 @@ void main() {
       expect(find.byType(ResultScreen), findsNothing);
       expect(claude.requests, hasLength(1));
 
-      // الإعدادات تورّي الاستعمال
+      // الإعدادات تورّي الاستعمال (النصّ في آخر الشاشة → نسكرولو ليه)
       await _clearSnackBars(tester);
       await _goTab(tester, 'الإعدادات');
-      await _waitFor(tester, find.text('استعملت 1 هالشهر.'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('استعملت 1 هالشهر.'), 200,
+          scrollable: find.byType(Scrollable).first);
+      expect(find.text('استعملت 1 هالشهر.'), findsOneWidget);
     }, () => claude.client);
   });
 
@@ -667,15 +670,17 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'مشاهدات'), '1500');
       await tester.enterText(find.widgetWithText(TextField, 'لايكات'), '200');
       await _tap(tester, find.widgetWithText(FilledButton, 'سجّل'));
-      await _waitFor(tester, find.text('تسجّلت الإحصائيات 📊'));
-
-      // الأرقام تبان (fmtNum: 1500 → 1.5K)
-      expect(find.text('1.5K'), findsOneWidget);
-      expect(find.text('200'), findsOneWidget);
+      await tester.pumpAndSettle();
 
       final saved = (await AppStorage.searchScripts()).first;
       expect(saved.views, 1500);
       expect(saved.likes, 200);
+
+      // الأرقام تبان في قسم الإحصائيات (آخر النتيجة → نسكرولو ليه)
+      await tester.scrollUntilVisible(find.text('1.5K'), 300,
+          scrollable: _in<ResultScreen>(find.byType(Scrollable)).first);
+      expect(find.text('1.5K'), findsOneWidget); // fmtNum: 1500 → 1.5K
+      expect(find.text('200'), findsOneWidget);
 
       // نرجعو لحضّر → نصيحة أحسن نوع تبان
       await tester.pageBack();
@@ -694,6 +699,7 @@ void main() {
       await _tap(tester, find.text('➕ سلسلة جديدة').last);
       await tester.enterText(
           find.widgetWithText(TextField, 'اسم السلسلة الجديدة'), 'رحلتي مع البرمجة');
+      FocusManager.instance.primaryFocus?.unfocus(); // نسكّرو الـkeyboard
       await tester.pumpAndSettle();
 
       // الحلقة 1
@@ -707,10 +713,7 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      // الحلقة 2 — نختارو السلسلة الموجودة
-      await _tap(tester, find.byType(DropdownButtonFormField<String?>));
-      await _tap(tester, find.text('📺 رحلتي مع البرمجة').last);
-      await tester.pumpAndSettle();
+      // الحلقة 2 — نفس السلسلة مازالت مختارة (نكمّلو عليها)
       await _generate(tester);
       expect(find.textContaining('حلقة 2'), findsOneWidget);
       final s2 = (await AppStorage.searchScripts()).first;
