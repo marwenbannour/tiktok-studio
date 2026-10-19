@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:tiktok_studio/main.dart';
+import 'package:tiktok_studio/models.dart';
 import 'package:tiktok_studio/screens/result_screen.dart';
 import 'package:tiktok_studio/screens/studio_screen.dart';
 import 'package:tiktok_studio/storage.dart';
@@ -66,6 +67,14 @@ void main() {
   }
 
   Future<void> tapVisible(WidgetTester t, Finder f) async {
+    if (f.evaluate().isEmpty) {
+      final sc = find.byType(Scrollable);
+      if (sc.evaluate().isNotEmpty) {
+        try {
+          await t.scrollUntilVisible(f, 250, scrollable: sc.first);
+        } catch (_) {}
+      }
+    }
     await t.ensureVisible(f);
     await t.pumpAndSettle();
     await t.tap(f);
@@ -110,6 +119,27 @@ void main() {
       await tapVisible(tester, find.descendant(
           of: find.byType(NavigationBar), matching: find.text('الإعدادات')));
       await shot(tester, '4_settings');
+
+      // 5) لوحة الإحصائيات — نزرعو بيانات بإحصائيات
+      VideoScript seed(String t, String c, int created) => VideoScript.fromJson({
+            'title': t, 'category': c, 'style': 'x', 'duration': 20,
+            'segments': [{'from': 0, 'to': 20, 'screen': 's', 'text': 't', 'voice': 'v'}],
+            'caption': 'c', 'hashtags': ['#a'], 'createdAt': created,
+          });
+      final a = await AppStorage.saveScript(seed('أحسن فيديو عن الـAI', 'Dev AI', 1000));
+      final b = await AppStorage.saveScript(seed('تكتيك الضغط العالي', 'Football', 2000));
+      final cc = await AppStorage.saveScript(seed('معلومة غريبة على الفضاء', 'معلومات وحقائق', 3000));
+      await AppStorage.setStats(a.dbId!, 12500, 1800, 230);
+      await AppStorage.setStats(b.dbId!, 3400, 420, 55);
+      await AppStorage.setStats(cc.dbId!, 7800, 900, 110);
+      await AppStorage.setPublished(a.dbId!, 1760000000000);
+      await AppStorage.setPublished(b.dbId!, 1760000000000);
+      await AppStorage.setPublished(cc.dbId!, 1760000000000);
+
+      await tapVisible(tester, find.descendant(
+          of: find.byType(NavigationBar), matching: find.text('المحفوظات')));
+      await tapVisible(tester, find.byTooltip('إحصائيات الأداء'));
+      await shot(tester, '5_stats');
     }, () => mock);
   });
 }

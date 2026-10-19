@@ -105,6 +105,15 @@ Future<void> _goTab(WidgetTester tester, String label) async {
 }
 
 Future<void> _tap(WidgetTester tester, Finder f) async {
+  // كان الهدف تحت الـfold في ListView (ما يتبناش)، نسكرولو ليه
+  if (f.evaluate().isEmpty) {
+    final sc = find.byType(Scrollable);
+    if (sc.evaluate().isNotEmpty) {
+      try {
+        await tester.scrollUntilVisible(f, 250, scrollable: sc.first);
+      } catch (_) {}
+    }
+  }
   await tester.ensureVisible(f);
   await tester.pumpAndSettle();
   await tester.tap(f);
@@ -143,7 +152,12 @@ Future<void> _saveKey(WidgetTester tester, String key) async {
   await _goTab(tester, 'الإعدادات');
   await tester.enterText(_in<SettingsScreen>(find.byType(TextField)).first, key);
   await _tap(tester, find.text('سجّل المفتاح'));
-  await _waitFor(tester, find.text('تسجّل المفتاح ✅'));
+  // نتأكّد من التخزين بدل انتظار الـsnackbar العابر (أثبت على emulator بطيء)
+  const ss = FlutterSecureStorage();
+  for (var i = 0; i < 40 && (await ss.read(key: 'anthropic_api_key')) != key; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  expect(await ss.read(key: 'anthropic_api_key'), key);
   await _clearSnackBars(tester);
   await _goTab(tester, 'حضّر');
 }
