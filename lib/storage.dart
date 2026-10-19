@@ -163,6 +163,14 @@ class AppStorage {
   static Future<({String category, double avgViews, int count})?> bestCategory() =>
       _db.bestCategory();
 
+  // ---- لوحة الإحصائيات (V2) ----
+  static Future<({int published, int views, int likes, int comments})> globalStats() =>
+      _db.globalStats();
+  static Future<List<({String category, int count, double avgViews})>> categoryStats() =>
+      _db.categoryStats();
+  static Future<List<VideoScript>> topByViews(int limit) async =>
+      (await _db.topByViews(limit)).map(_toScript).toList();
+
   // ---- السلاسل (V2) ----
   static Future<List<String>> seriesTitles() => _db.seriesTitles();
   static Future<int> nextEpisode(String title) => _db.nextEpisode(title);

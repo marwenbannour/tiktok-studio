@@ -148,6 +148,51 @@ class AppDatabase extends _$AppDatabase {
     return (row?.read(maxE) ?? 0) + 1;
   }
 
+  // ---- لوحة الإحصائيات (V2) ----
+  /// مجاميع عامّة: المنشورين + مجموع المشاهدات/اللايكات/الكومنتات
+  Future<({int published, int views, int likes, int comments})> globalStats() async {
+    final v = scripts.views.sum();
+    final l = scripts.likes.sum();
+    final c = scripts.comments.sum();
+    final sumRow = await (selectOnly(scripts)..addColumns([v, l, c])).getSingle();
+    final pubCnt = scripts.id.count();
+    final pubRow = await (selectOnly(scripts)
+          ..addColumns([pubCnt])
+          ..where(scripts.publishedAt.isNotNull()))
+        .getSingle();
+    return (
+      published: pubRow.read(pubCnt) ?? 0,
+      views: sumRow.read(v) ?? 0,
+      likes: sumRow.read(l) ?? 0,
+      comments: sumRow.read(c) ?? 0,
+    );
+  }
+
+  /// عدد السكريبتات ومتوسّط المشاهدات حسب النوع
+  Future<List<({String category, int count, double avgViews})>> categoryStats() async {
+    final cnt = scripts.id.count();
+    final avg = scripts.views.avg();
+    final q = selectOnly(scripts)
+      ..addColumns([scripts.category, cnt, avg])
+      ..groupBy([scripts.category])
+      ..orderBy([OrderingTerm.desc(avg), OrderingTerm.desc(cnt)]);
+    final rows = await q.get();
+    return rows
+        .map((r) => (
+              category: r.read(scripts.category) ?? '',
+              count: r.read(cnt) ?? 0,
+              avgViews: r.read(avg) ?? 0.0,
+            ))
+        .toList();
+  }
+
+  /// أحسن الفيديوهات (أعلى مشاهدات)
+  Future<List<Script>> topByViews(int limit) => (select(scripts)
+        ..where((t) => t.views.isNotNull())
+        ..orderBy([(t) => OrderingTerm.desc(t.views)])
+        ..limit(limit))
+      .get();
+
   Future<int> total() async {
     final c = scripts.id.count();
     final row = await (selectOnly(scripts)..addColumns([c])).getSingle();

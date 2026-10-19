@@ -708,6 +708,39 @@ void main() {
     }, () => claude.client);
   });
 
+  testWidgets('لوحة إحصائيات الأداء (V2)', (tester) async {
+    VideoScript seed(String title, String cat, int created) => VideoScript.fromJson({
+          'title': title,
+          'category': cat,
+          'style': 'x',
+          'duration': 20,
+          'segments': [
+            {'from': 0, 'to': 20, 'screen': 's', 'text': 't', 'voice': '$title voice'}
+          ],
+          'caption': 'c',
+          'hashtags': ['#a'],
+          'createdAt': created,
+        });
+
+    await http.runWithClient(() async {
+      final s1 = await AppStorage.saveScript(seed('فيديو ناجح', 'Football', 1000));
+      final s2 = await AppStorage.saveScript(seed('فيديو عادي', 'Dev AI', 2000));
+      await AppStorage.setStats(s1.dbId!, 5000, 300, 40);
+      await AppStorage.setStats(s2.dbId!, 500, 20, 5);
+      await AppStorage.setPublished(s1.dbId!, 1760000000000);
+
+      await _launch(tester);
+      await _goTab(tester, 'المحفوظات');
+      await _tap(tester, find.byTooltip('إحصائيات الأداء'));
+      await _waitFor(tester, find.text('📊 إحصائيات الأداء'));
+
+      expect(find.text('5.5K'), findsOneWidget); // مجموع المشاهدات 5500
+      expect(find.text('📈 الأداء حسب النوع'), findsOneWidget);
+      expect(find.text('🏆 أحسن الفيديوهات'), findsOneWidget);
+      expect(find.text('فيديو ناجح'), findsWidgets);
+    }, () => claude.client);
+  });
+
   group('أخطاء الـAPI تبان بالدارجة', () {
     final cases = <String, (http.Response Function(String), String)>{
       '401': ((_) => _claudeReply('', status: 401),

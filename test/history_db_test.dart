@@ -113,6 +113,35 @@ void main() {
     expect((await db.byId(a))!.views, isNull);
   });
 
+  test('V2: لوحة الإحصائيات (globalStats, categoryStats, topByViews)', () async {
+    final a = await db.add(row('a', 'Dev AI'));
+    final b = await db.add(row('b', 'Football'));
+    final c = await db.add(row('c', 'Football'));
+    await db.add(row('d', 'Dev AI')); // بلا إحصائيات
+    await db.setStats(a, 500, 50, 10);
+    await db.setStats(b, 1000, 100, 20);
+    await db.setStats(c, 3000, 200, 30);
+    await db.setPublished(a, 1760000000000);
+    await db.setPublished(b, 1760000000000);
+
+    final g = await db.globalStats();
+    expect(g.published, 2);
+    expect(g.views, 4500); // 500+1000+3000
+    expect(g.likes, 350);
+    expect(g.comments, 60);
+
+    final byCat = await db.categoryStats();
+    expect(byCat.first.category, 'Football'); // أعلى متوسّط (2000)
+    expect(byCat.first.avgViews, 2000);
+    expect(byCat.first.count, 2);
+    final dev = byCat.firstWhere((e) => e.category == 'Dev AI');
+    expect(dev.count, 2); // a + d
+    expect(dev.avgViews, 500); // المتوسّط يتجاهل الـnull
+
+    final top = await db.topByViews(2);
+    expect(top.map((s) => s.views), [3000, 1000]); // c, b
+  });
+
   test('V2: السلاسل (épisodes)', () async {
     await db.add(row('عادي', 'Dev AI')); // بلا سلسلة
     expect(await db.seriesTitles(), isEmpty);

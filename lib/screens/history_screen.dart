@@ -4,6 +4,7 @@ import '../models.dart';
 import '../storage.dart';
 import '../theme.dart';
 import 'result_screen.dart';
+import 'stats_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -124,7 +125,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('السكريبتات المحفوظة')),
+      appBar: AppBar(
+        title: const Text('السكريبتات المحفوظة'),
+        actions: [
+          IconButton(
+            tooltip: 'إحصائيات الأداء',
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const StatsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
