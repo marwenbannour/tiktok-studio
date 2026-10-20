@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Stats, UsageRow } from "./types";
+import type { ModelStat, Stats, UsageRow } from "./types";
 
 const DAYS = 14;
 
@@ -17,12 +17,19 @@ function aggregate(rows: UsageRow[], demo: boolean): Stats {
   let msCount = 0;
   const byModelMap = new Map<string, number>();
   const byDayMap = new Map<string, number>();
+  const hours = new Array(24).fill(0);
+  const statusMap = new Map<number, number>();
+  // لكل يوم: مجموع ms وعدد
+  const dayMs = new Map<string, { sum: number; n: number }>();
+  // لكل موديل: تفاصيل
+  const modelDetail = new Map<string, { count: number; ok: number; sum: number; n: number }>();
 
   // آخر DAYS يوم (حتى لو فارغين)
   for (let i = DAYS - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(now.getDate() - i);
     byDayMap.set(dayKey(d), 0);
+    dayMs.set(dayKey(d), { sum: 0, n: 0 });
   }
 
   for (const r of rows) {
@@ -32,10 +39,37 @@ function aggregate(rows: UsageRow[], demo: boolean): Stats {
       msCount++;
     }
     byModelMap.set(r.model, (byModelMap.get(r.model) ?? 0) + 1);
+    statusMap.set(r.status, (statusMap.get(r.status) ?? 0) + 1);
+    hours[new Date(r.created_at).getHours()]++;
+
     const dk = r.created_at.slice(0, 10);
     if (byDayMap.has(dk)) byDayMap.set(dk, (byDayMap.get(dk) ?? 0) + 1);
+    if (typeof r.ms === "number" && dayMs.has(dk)) {
+      const e = dayMs.get(dk)!;
+      e.sum += r.ms;
+      e.n++;
+    }
+
+    const md = modelDetail.get(r.model) ?? { count: 0, ok: 0, sum: 0, n: 0 };
+    md.count++;
+    if (r.ok) md.ok++;
+    if (typeof r.ms === "number") {
+      md.sum += r.ms;
+      md.n++;
+    }
+    modelDetail.set(r.model, md);
+
     if (r.created_at.slice(0, 7) === monthKey) month++;
   }
+
+  const models: ModelStat[] = [...modelDetail.entries()]
+    .map(([model, d]) => ({
+      model,
+      count: d.count,
+      okRate: d.count ? d.ok / d.count : 0,
+      avgMs: d.n ? Math.round(d.sum / d.n) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return {
     demo,
@@ -46,6 +80,15 @@ function aggregate(rows: UsageRow[], demo: boolean): Stats {
     byDay: [...byDayMap.entries()].map(([day, count]) => ({ day, count })),
     byModel: [...byModelMap.entries()]
       .map(([model, count]) => ({ model, count }))
+      .sort((a, b) => b.count - a.count),
+    byHour: hours.map((count, hour) => ({ hour, count })),
+    latencyByDay: [...dayMs.entries()].map(([day, e]) => ({
+      day,
+      ms: e.n ? Math.round(e.sum / e.n) : 0,
+    })),
+    models,
+    statuses: [...statusMap.entries()]
+      .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count),
     recent: rows.slice(0, 12),
   };

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/", label: "الإحصائيات" },
+  { href: "/models", label: "الموديلات" },
   { href: "/generate", label: "المولّد" },
 ];
 

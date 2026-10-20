@@ -1,4 +1,4 @@
-import { UsageChart, ModelBar } from "@/components/Charts";
+import { HourBar, LatencyChart, ModelBar, UsageChart } from "@/components/Charts";
 import { getStats } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +69,17 @@ export default async function DashboardPage() {
           ) : (
             <p className="muted">ما فماش بيانات بعد.</p>
           )}
+        </div>
+      </div>
+
+      <div className="grid cols2" style={{ marginTop: 14 }}>
+        <div className="card">
+          <h2 className="section-title">⏱️ زمن الردّ (14 يوم)</h2>
+          <LatencyChart data={s.latencyByDay} />
+        </div>
+        <div className="card">
+          <h2 className="section-title">🕐 النشاط حسب الساعة</h2>
+          <HourBar data={s.byHour} />
         </div>
       </div>
 

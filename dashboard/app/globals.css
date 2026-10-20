@@ -183,6 +183,11 @@ a {
   margin: 0 0 10px;
 }
 
+/* الرسوم طبيعتها LTR (محاور، أرقام، أسماء موديلات) — نمنعو قصّ labels في RTL */
+.recharts-responsive-container {
+  direction: ltr;
+}
+
 /* ---- Table ---- */
 table {
   width: 100%;
@@ -215,6 +220,10 @@ th {
 .badge.err {
   color: var(--rose);
   background: rgba(255, 45, 85, 0.14);
+}
+.badge.warn {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.16);
 }
 
 /* ---- Form ---- */

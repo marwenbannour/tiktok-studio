@@ -45,6 +45,31 @@ cd ../backend
 supabase db push   # يطبّق supabase/migrations/*_usage_log.sql
 ```
 
-## النشر
+## النشر على Vercel
 
-أي منصّة تدعم Next.js (Vercel مثلا): اربط الـrepo، حطّ المتغيّرات الأربعة، وانشر.
+الداشبورد في مجلّد فرعي (`dashboard/`)، على هيكا **لازم تحدّد Root Directory**.
+
+### الطريقة 1 — من GitHub (الأسهل)
+
+1. [vercel.com/new](https://vercel.com/new) ← Import الـrepo `marwenbannour/tiktok-studio`.
+2. **Root Directory** → اختار `dashboard`.
+3. Framework: Next.js (يتعرّف وحدو). Build: `next build` (default).
+4. **Environment Variables** → زيد الأربعة:
+   - `BACKEND_URL`, `APP_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+5. Deploy. أي push على `main` يعمل redeploy وحدو.
+
+### الطريقة 2 — بالـCLI
+
+```bash
+cd dashboard
+vercel login
+vercel            # أول مرّة: يسأل، خلّي Root Directory = ./ (إنت ديجا في dashboard)
+vercel env add BACKEND_URL
+vercel env add APP_TOKEN
+vercel env add SUPABASE_URL
+vercel env add SUPABASE_SERVICE_ROLE_KEY
+vercel --prod     # النشر النهائي
+```
+
+> الأسرار تتحطّ في Vercel (Environment Variables)، ما تتحطّش في الكود. بلا متغيّرات
+> الداشبورد تنشر وتخدم بـ**بيانات تجريبية**.
