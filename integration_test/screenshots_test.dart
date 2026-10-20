@@ -88,6 +88,30 @@ void main() {
     await t.pumpAndSettle();
   }
 
+  // pumpAndSettle محدود بالوقت (ما يعلّقش كان فمّا animation/timer دايم)
+  Future<void> settle(WidgetTester t) async {
+    try {
+      await t.pumpAndSettle(const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate, const Duration(seconds: 6));
+    } catch (_) {
+      await t.pump(const Duration(milliseconds: 300));
+    }
+  }
+
+  // نستنّى عنصر يظهر بحدّ أقصى (بلا pumpAndSettle)
+  Future<bool> waitFor(WidgetTester t, Finder f, {int max = 60}) async {
+    for (var i = 0; i < max && f.evaluate().isEmpty; i++) {
+      await t.pump(const Duration(milliseconds: 200));
+    }
+    return f.evaluate().isNotEmpty;
+  }
+
+  // screenshot بلا pumpAndSettle (آمن وقت التسجيل خاطر فمّا timer دايم)
+  Future<void> snap(WidgetTester t, String name) async {
+    await t.pump(const Duration(milliseconds: 300));
+    await binding.takeScreenshot(name);
+  }
+
   testWidgets('capture Play Store screenshots', (tester) async {
     await http.runWithClient(() async {
       await AppStorage.setApiKey('demo-key');
@@ -116,49 +140,47 @@ void main() {
       await shot(tester, '2_result');
 
       // 6) تسجيل بالكاميرا (Teleprompter → 🎥) — الأذونات تتعطا بالتوازي عبر adb
-      await tapVisible(tester, find.text('Teleprompter'));
-      await tester.pumpAndSettle();
-      await tapVisible(tester, find.byTooltip('سجّل بالكاميرا'));
-      for (var i = 0; i < 100; i++) {
-        await tester.pump(const Duration(milliseconds: 300));
-        if (find.byType(CameraPreview).evaluate().isNotEmpty) break;
-      }
-      await tester.pumpAndSettle();
-      await shot(tester, '6_record');
+      await tapVisible(tester, find.text('Teleprompter')); // FAB فـ ResultScreen
+      final camBtn = find.byTooltip('سجّل بالكاميرا');
+      if (await waitFor(tester, camBtn, max: 50)) {
+        await tester.tap(camBtn); // 🎥 في الـAppBar (ما يحتاجش scroll)
+        // نستنّاو الكاميرا تحلّ (preview)
+        for (var i = 0; i < 120; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+          if (find.byType(CameraPreview).evaluate().isNotEmpty) break;
+        }
+        await snap(tester, '6_record');
 
-      // نسجّلو فيديو حقيقي: سجّل → 3-2-1 → ~4s → وقّف → يتسجّل فالـgalerie
-      final recBtn = find.text('سجّل');
-      if (recBtn.evaluate().isNotEmpty) {
-        await tester.tap(recBtn);
-        // العدّ التنازلي 3 ثواني + تسجيل
-        for (var i = 0; i < 24; i++) {
-          await tester.pump(const Duration(milliseconds: 300));
-        }
-        await shot(tester, '7_recording');
-        // نكمّلو شويّة تسجيل
-        for (var i = 0; i < 14; i++) {
-          await tester.pump(const Duration(milliseconds: 300));
-        }
-        final stopBtn = find.text('وقّف التسجيل');
-        if (stopBtn.evaluate().isNotEmpty) {
-          await tester.tap(stopBtn);
-          // نستنّاو الحفظ فالـgalerie
-          for (var i = 0; i < 40; i++) {
-            await tester.pump(const Duration(milliseconds: 300));
-            if (find.text('تسجّل الفيديو في الـgalerie ✅').evaluate().isNotEmpty) break;
+        // تسجيل حقيقي: سجّل → 3-2-1 → ~4s → وقّف → يتسجّل فالـgalerie
+        final recBtn = find.text('سجّل');
+        if (recBtn.evaluate().isNotEmpty) {
+          await tester.tap(recBtn);
+          for (var i = 0; i < 24; i++) {
+            await tester.pump(const Duration(milliseconds: 300)); // 3-2-1 + تسجيل
           }
-          await shot(tester, '8_saved');
+          await snap(tester, '7_recording');
+          for (var i = 0; i < 14; i++) {
+            await tester.pump(const Duration(milliseconds: 300)); // نكمّلو تسجيل
+          }
+          final stopBtn = find.text('وقّف التسجيل');
+          if (stopBtn.evaluate().isNotEmpty) {
+            await tester.tap(stopBtn);
+            for (var i = 0; i < 50; i++) {
+              await tester.pump(const Duration(milliseconds: 300));
+              if (find.text('تسجّل الفيديو في الـgalerie ✅').evaluate().isNotEmpty) break;
+            }
+            await snap(tester, '8_saved');
+          }
         }
       }
 
-      await tester.pageBack(); // من التسجيل
-      await tester.pumpAndSettle();
-      await tester.pageBack(); // من Teleprompter → النتيجة
-      await tester.pumpAndSettle();
+      // نرجعو للـhome: نطيّحو كل الصفحات المفتوحة (Record/Teleprompter/Result)
+      for (var i = 0; i < 5 && find.byType(NavigationBar).evaluate().isEmpty; i++) {
+        await tester.pageBack();
+        await settle(tester);
+      }
 
       // 3) المحفوظات
-      await tester.pageBack();
-      await tester.pumpAndSettle();
       await tapVisible(tester, find.descendant(
           of: find.byType(NavigationBar), matching: find.text('المحفوظات')));
       await shot(tester, '3_history');
