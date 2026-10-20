@@ -27,6 +27,30 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "content-type": "application/json" },
   });
 
+// تسجيل الاستعمال في جدول usage_log (fire-and-forget — ما يعطّلش الجواب).
+// SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY يحطّهم Supabase وحدو فالـEdge Function.
+function logUsage(row: {
+  model: string;
+  ok: boolean;
+  status: number;
+  ms: number;
+  source?: string;
+}) {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return;
+  fetch(`${url}/rest/v1/usage_log`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify({ source: "app", ...row }),
+  }).catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -72,6 +96,7 @@ Deno.serve(async (req) => {
   if (payload["format"] === "json") upstreamBody["format"] = "json";
 
   // تعدية لـOllama بالمفتاح السرّي
+  const started = Date.now();
   let upstream: Response;
   try {
     upstream = await fetch(OLLAMA_URL, {
@@ -83,11 +108,18 @@ Deno.serve(async (req) => {
       body: JSON.stringify(upstreamBody),
     });
   } catch (_e) {
+    logUsage({ model, ok: false, status: 502, ms: Date.now() - started });
     return json({ error: "upstream unreachable" }, 502);
   }
 
   // نرجّعو الجواب كيما هو (نفس شكل Ollama: {message:{content}})
   const text = await upstream.text();
+  logUsage({
+    model,
+    ok: upstream.ok,
+    status: upstream.status,
+    ms: Date.now() - started,
+  });
   return new Response(text, {
     status: upstream.status,
     headers: { ...cors, "content-type": "application/json" },
