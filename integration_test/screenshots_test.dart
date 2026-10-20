@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -67,13 +68,19 @@ void main() {
   }
 
   Future<void> tapVisible(WidgetTester t, Finder f) async {
+    // نلوّج على العنصر: نجرّبو كل Scrollable عمودي (فمّا scrollers أفقية للـchips)
     if (f.evaluate().isEmpty) {
-      final sc = find.byType(Scrollable);
-      if (sc.evaluate().isNotEmpty) {
+      for (final sc in find.byType(Scrollable).evaluate()) {
+        if (f.evaluate().isNotEmpty) break;
         try {
-          await t.scrollUntilVisible(f, 250, scrollable: sc.first);
+          await t.scrollUntilVisible(f, 200,
+              scrollable: find.byWidget(sc.widget), maxScrolls: 30);
         } catch (_) {}
       }
+    }
+    // نستنّى شويّة كان مازال ما بان (render بطيء على émulateur بارد)
+    for (var i = 0; i < 20 && f.evaluate().isEmpty; i++) {
+      await t.pump(const Duration(milliseconds: 200));
     }
     await t.ensureVisible(f);
     await t.pumpAndSettle();
@@ -107,6 +114,47 @@ void main() {
       }
       await tester.pumpAndSettle();
       await shot(tester, '2_result');
+
+      // 6) تسجيل بالكاميرا (Teleprompter → 🎥) — الأذونات تتعطا بالتوازي عبر adb
+      await tapVisible(tester, find.text('Teleprompter'));
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.byTooltip('سجّل بالكاميرا'));
+      for (var i = 0; i < 100; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+        if (find.byType(CameraPreview).evaluate().isNotEmpty) break;
+      }
+      await tester.pumpAndSettle();
+      await shot(tester, '6_record');
+
+      // نسجّلو فيديو حقيقي: سجّل → 3-2-1 → ~4s → وقّف → يتسجّل فالـgalerie
+      final recBtn = find.text('سجّل');
+      if (recBtn.evaluate().isNotEmpty) {
+        await tester.tap(recBtn);
+        // العدّ التنازلي 3 ثواني + تسجيل
+        for (var i = 0; i < 24; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        await shot(tester, '7_recording');
+        // نكمّلو شويّة تسجيل
+        for (var i = 0; i < 14; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        final stopBtn = find.text('وقّف التسجيل');
+        if (stopBtn.evaluate().isNotEmpty) {
+          await tester.tap(stopBtn);
+          // نستنّاو الحفظ فالـgalerie
+          for (var i = 0; i < 40; i++) {
+            await tester.pump(const Duration(milliseconds: 300));
+            if (find.text('تسجّل الفيديو في الـgalerie ✅').evaluate().isNotEmpty) break;
+          }
+          await shot(tester, '8_saved');
+        }
+      }
+
+      await tester.pageBack(); // من التسجيل
+      await tester.pumpAndSettle();
+      await tester.pageBack(); // من Teleprompter → النتيجة
+      await tester.pumpAndSettle();
 
       // 3) المحفوظات
       await tester.pageBack();
