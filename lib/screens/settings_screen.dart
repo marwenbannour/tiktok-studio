@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../backup_io.dart';
 import '../storage.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _obscure = true;
   String _model = AppStorage.defaultModel;
   int _count = 0;
+  bool _busyBackup = false;
 
   @override
   void initState() {
@@ -70,6 +72,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _snack('تسجّل المفتاح ✅');
     }
     if (mounted) FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _export() async {
+    setState(() => _busyBackup = true);
+    try {
+      final n = await BackupIO.exportAndShare();
+      if (mounted) _snack(n == 0 ? 'ما فماش سكريبتات تتصدّر.' : 'تصدّرو $n سكريبت ✅');
+    } catch (e) {
+      if (mounted) _snack('ما نجّمناش نصدّرو النسخة.');
+    } finally {
+      if (mounted) setState(() => _busyBackup = false);
+    }
+  }
+
+  Future<void> _import() async {
+    setState(() => _busyBackup = true);
+    try {
+      final r = await BackupIO.importFromClipboard();
+      if (!mounted) return;
+      if (r == null) {
+        _snack('الحافظة فارغة. افتح ملف النسخة، اعمل Copier للكل، وبعد عاود.');
+      } else {
+        _snack(r.added == 0
+            ? 'كل السكريبتات موجودين ديجا (تتخطّى ${r.skipped}).'
+            : 'تسترجعو ${r.added} سكريبت ✅'
+                '${r.skipped > 0 ? ' (تتخطّى ${r.skipped} موجودين)' : ''}');
+      }
+    } on FormatException catch (e) {
+      if (mounted) _snack(e.message);
+    } catch (e) {
+      if (mounted) _snack('ما نجّمناش نسترجعو.');
+    } finally {
+      if (mounted) setState(() => _busyBackup = false);
+    }
   }
 
   Future<void> _pickModel(String m) async {
@@ -198,6 +234,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text('استعملت $_count هالشهر.',
               style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
+          const SizedBox(height: 28),
+          Text('النسخة الاحتياطية', style: tt.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            '«صدّر» يعمل ملف JSON بكل السكريبتات ويفتحلك المشاركة (حطّو في Drive ولا '
+            'ابعثو لروحك) — وينسخو زادة في الحافظة. باش تسترجع كي تبدّل التليفون: '
+            'افتح ملف النسخة، اعمل Copier للكل، وبعد أعمل «استرجع من الحافظة». '
+            'الاسترجاع ما يعاودش السكريبتات اللي موجودين ديجا.',
+            style: tt.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busyBackup ? null : _export,
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text('صدّر'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busyBackup ? null : _import,
+                  icon: const Icon(Icons.content_paste_go),
+                  label: const Text('استرجع من الحافظة'),
+                ),
+              ),
+            ],
+          ),
+          if (_busyBackup)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Center(child: CircularProgressIndicator()),
+            ),
         ],
       ),
     );
