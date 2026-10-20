@@ -14,7 +14,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _key = TextEditingController();
   final _custom = TextEditingController();
   final _cap = TextEditingController();
+  final _backend = TextEditingController();
+  final _token = TextEditingController();
   bool _obscure = true;
+  bool _obscureToken = true;
   String _model = AppStorage.defaultModel;
   int _count = 0;
   bool _busyBackup = false;
@@ -30,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final m = await AppStorage.getModel();
     final cap = await AppStorage.getGenCap();
     final count = await AppStorage.genCount();
+    final backend = await AppStorage.getBackendUrl();
+    final token = await AppStorage.getAppToken();
     if (!mounted) return;
     setState(() {
       _key.text = k ?? '';
@@ -38,6 +43,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!AppStorage.models.containsKey(m)) _custom.text = m;
       _cap.text = cap == 0 ? '' : '$cap';
       _count = count;
+      _backend.text = backend ?? '';
+      _token.text = token ?? '';
     });
   }
 
@@ -46,7 +53,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _key.dispose();
     _custom.dispose();
     _cap.dispose();
+    _backend.dispose();
+    _token.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveBackend() async {
+    await AppStorage.setBackendUrl(_backend.text);
+    await AppStorage.setAppToken(_token.text);
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    _snack(_backend.text.trim().isEmpty
+        ? 'تشال السيرفر الوسيط. الـapp ترجع للمفتاح المحلّي.'
+        : 'تسجّل السيرفر الوسيط ✅ (المفتاح المحلّي ما عادش لازم)');
   }
 
   Future<void> _saveCap() async {
@@ -162,6 +181,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'متاعك برك. ما تورّيه لحدّ، وما يبانش في حتى فيديو تسجّل فيه الشاشة!',
             style: tt.bodySmall,
           ),
+          const SizedBox(height: 28),
+          Text('السيرفر الوسيط (اختياري)', style: tt.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'كان تحبّ ما تحطّش المفتاح على التليفون (مثلا للنشر على Play Store)، حطّ '
+            'عنوان السيرفر وكلمة سرّ التطبيق. ساعتها المفتاح يقعد مخبّي فالسيرفر '
+            'والـapp ما تحتاجش مفتاح Ollama محلّي. (شوف backend/README.md)',
+            style: tt.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              controller: _backend,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                hintText: 'https://xxxx.supabase.co/functions/v1/generate',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              controller: _token,
+              obscureText: _obscureToken,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                hintText: 'كلمة سرّ التطبيق (x-app-token)',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureToken ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setState(() => _obscureToken = !_obscureToken),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton(onPressed: _saveBackend, child: const Text('سجّل السيرفر')),
           const SizedBox(height: 28),
           Text('الموديل', style: tt.titleMedium),
           const SizedBox(height: 4),

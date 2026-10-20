@@ -18,31 +18,63 @@ class ClaudeException implements Exception {
 
 /// اتصال بـOllama Cloud API (endpoint: /api/chat)
 /// https://docs.ollama.com/cloud/api
+///
+/// وضعين:
+///  - مباشر: المفتاح على التليفون، ننادي ollama.com مباشرة.
+///  - سيرفر وسيط (backend): المفتاح مخبّي في السيرفر (Supabase Edge Function)،
+///    ننادي [backendUrl] بـheader x-app-token، والسيرفر يعدّي لـOllama.
+///    نفس شكل الطلب والجواب باش الكود يبقى واحد.
 class ClaudeApi {
-  static const _url = 'https://ollama.com/api/chat';
+  static const _ollamaUrl = 'https://ollama.com/api/chat';
 
   final String apiKey;
   final String model;
+  final String? backendUrl;
+  final String? appToken;
 
-  ClaudeApi({required this.apiKey, required this.model});
+  ClaudeApi({
+    required this.apiKey,
+    required this.model,
+    this.backendUrl,
+    this.appToken,
+  });
 
-  /// بالمفتاح والموديل المسجّلين في «الإعدادات»، ولا null كان ما فماش مفتاح
+  bool get usesBackend => (backendUrl?.trim().isNotEmpty) ?? false;
+
+  /// بالإعدادات المسجّلة: كان فمّا backend نمشيو بيه (بلا مفتاح محلّي)،
+  /// وإلّا نلزمو المفتاح المحلّي. يرجّع null كان لا backend لا مفتاح.
   static Future<ClaudeApi?> fromSettings() async {
+    final model = await AppStorage.getModel();
+    final backend = await AppStorage.getBackendUrl();
+    if (backend != null && backend.trim().isNotEmpty) {
+      final token = await AppStorage.getAppToken();
+      return ClaudeApi(
+        apiKey: '',
+        model: model,
+        backendUrl: backend.trim(),
+        appToken: token?.trim(),
+      );
+    }
     final key = await AppStorage.getApiKey();
     if (key == null || key.trim().isEmpty) return null;
-    return ClaudeApi(apiKey: key.trim(), model: await AppStorage.getModel());
+    return ClaudeApi(apiKey: key.trim(), model: model);
   }
 
-  static const noKeyMessage = 'زيد مفتاح الـAPI في «الإعدادات» قبل.';
+  static const noKeyMessage =
+      'زيد مفتاح الـAPI (ولا عنوان السيرفر) في «الإعدادات» قبل.';
 
   Future<String> ask(String prompt, {int maxTokens = 4000, bool json = false}) async {
+    final headers = <String, String>{'content-type': 'application/json'};
+    if (usesBackend) {
+      if ((appToken ?? '').isNotEmpty) headers['x-app-token'] = appToken!;
+    } else {
+      headers['authorization'] = 'Bearer $apiKey';
+    }
+
     final res = await http
         .post(
-          Uri.parse(_url),
-          headers: {
-            'content-type': 'application/json',
-            'authorization': 'Bearer $apiKey',
-          },
+          Uri.parse(usesBackend ? backendUrl!.trim() : _ollamaUrl),
+          headers: headers,
           body: jsonEncode({
             'model': model,
             'stream': false,

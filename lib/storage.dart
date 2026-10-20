@@ -39,6 +39,45 @@ class AppStorage {
   static Future<void> setApiKey(String k) => _secure.write(key: _keyName, value: k);
   static Future<void> deleteApiKey() => _secure.delete(key: _keyName);
 
+  // ---- السيرفر الوسيط (backend) — يخبّي المفتاح في السيرفر ----
+  // العنوان موش سرّي (prefs)؛ الـtoken سرّي (مشفّر كيما المفتاح).
+  static const _backendUrlName = 'backend_url';
+  static const _appTokenName = 'app_token';
+
+  static Future<String?> getBackendUrl() async {
+    final p = await SharedPreferences.getInstance();
+    final u = p.getString(_backendUrlName)?.trim();
+    return (u == null || u.isEmpty) ? null : u;
+  }
+
+  static Future<void> setBackendUrl(String? url) async {
+    final p = await SharedPreferences.getInstance();
+    final u = url?.trim() ?? '';
+    if (u.isEmpty) {
+      await p.remove(_backendUrlName);
+    } else {
+      await p.setString(_backendUrlName, u);
+    }
+  }
+
+  static Future<String?> getAppToken() async {
+    try {
+      return await _secure.read(key: _appTokenName);
+    } catch (e) {
+      debugPrint('getAppToken: $e');
+      return null;
+    }
+  }
+
+  static Future<void> setAppToken(String? t) async {
+    final v = t?.trim() ?? '';
+    if (v.isEmpty) {
+      await _secure.delete(key: _appTokenName);
+    } else {
+      await _secure.write(key: _appTokenName, value: v);
+    }
+  }
+
   // ---- الموديل ----
   static Future<String> getModel() async {
     final p = await SharedPreferences.getInstance();
