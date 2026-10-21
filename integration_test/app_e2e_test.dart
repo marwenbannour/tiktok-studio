@@ -19,6 +19,7 @@ import 'package:tiktok_studio/exporter.dart';
 import 'package:tiktok_studio/main.dart';
 import 'package:tiktok_studio/models.dart';
 import 'package:tiktok_studio/reminders.dart';
+import 'package:tiktok_studio/screens/ab_screen.dart';
 import 'package:tiktok_studio/screens/history_screen.dart';
 import 'package:tiktok_studio/screens/plans_screen.dart';
 import 'package:tiktok_studio/screens/segment_editor.dart';
@@ -57,6 +58,12 @@ final _script = {
 
 const _rewritten = {'screen': 'شاشة جديدة', 'text': 'نص جديد', 'voice': 'صوت جديد من Claude'};
 
+const _hooks = [
+  'شدّ بالك: هالغلطة تقتل كودك',
+  'في 3 ثواني نفهّمك الـAPI',
+  'محدّش قاللك هالحاجة على الكود',
+];
+
 /// يرجّع جواب كيما Ollama API: {"message":{"role":"assistant","content":...}}
 http.Response _claudeReply(String text, {int status = 200}) => http.Response.bytes(
       utf8.encode(jsonEncode({
@@ -81,6 +88,7 @@ class FakeClaude {
     final p = (jsonDecode(req.body)['messages'] as List).first['content'] as String;
     if (override != null) return override!(p);
     if (p.contains('اقترح 5 أفكار')) return _claudeReply(jsonEncode({'ideas': _ideas}));
+    if (p.contains('3 hooks')) return _claudeReply(jsonEncode({'hooks': _hooks}));
     if (p.contains('عاود اكتب segment')) return _claudeReply(jsonEncode(_rewritten));
     // نلفّو الـJSON بـ```json باش نتأكدو إنّ الـapp تنظّفو
     return _claudeReply('```json\n${jsonEncode(_script)}\n```');
@@ -786,5 +794,53 @@ void main() {
         }, () => claude.client);
       });
     }
+  });
+
+  testWidgets('hooks: اقتراح 3 ← اختيار ← يتبعث للتوليد', (tester) async {
+    await http.runWithClient(() async {
+      await _launch(tester);
+      await _saveKey(tester, _fakeKey);
+
+      await _tap(tester, find.textContaining('hooks'));
+      await _waitFor(tester, find.text(_hooks[0]));
+      for (final h in _hooks) {
+        expect(find.text(h), findsOneWidget);
+      }
+      expect(claude.prompt(claude.requests.length - 1), contains('3 hooks'));
+
+      // نختار الثاني → يبان banner والقائمة تسكّر
+      await _tap(tester, find.text(_hooks[1]));
+      await _waitFor(tester, find.textContaining('الـhook المختار'));
+      expect(find.text(_hooks[0]), findsNothing);
+
+      // نحضّر → الـhook المختار يتفرض في الـprompt
+      await _tap(tester, find.text('حضّرلي الفيديو'));
+      await _waitFor(tester, find.byType(ResultScreen));
+      expect(claude.prompt(claude.requests.length - 1), contains('«${_hooks[1]}»'));
+    }, () => claude.client);
+  });
+
+  testWidgets('A/B: نسختين بـhooks مختلفة ← اعتماد وحدة', (tester) async {
+    await http.runWithClient(() async {
+      await _launch(tester);
+      await _saveKey(tester, _fakeKey);
+
+      await _tap(tester, find.textContaining('A/B'));
+      await _waitFor(tester, find.byType(ABScreen));
+      expect(find.text('اعتمد نسخة A'), findsOneWidget);
+      expect(find.text('اعتمد نسخة B'), findsOneWidget);
+
+      // طلب hooks واحد + زوز طلبات script بـhooks مختلفة
+      final prompts = [for (var i = 0; i < claude.requests.length; i++) claude.prompt(i)];
+      expect(prompts.where((p) => p.contains('3 hooks')).length, 1);
+      expect(prompts.where((p) => p.contains('المطلوب: سكريبت فيديو')).length, 2);
+      expect(prompts.where((p) => p.contains('«${_hooks[0]}»')).length, 1);
+      expect(prompts.where((p) => p.contains('«${_hooks[1]}»')).length, 1);
+
+      // نعتمد A → تتحفظ وتفتح النتيجة
+      await _tap(tester, find.text('اعتمد نسخة A'));
+      await _waitFor(tester, find.byType(ResultScreen));
+      expect(find.byType(ABScreen), findsNothing); // pushReplacement
+    }, () => claude.client);
   });
 }
