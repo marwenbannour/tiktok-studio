@@ -37,6 +37,9 @@ class _StudioScreenState extends State<StudioScreen> {
   bool _loading = false;
   bool _loadingIdeas = false;
   List<String> _ideas = [];
+  bool _loadingHooks = false;
+  List<String> _hooks = [];
+  String? _chosenHook; // الـhook المختار (يتبعث للتوليد)
   ({String category, double avgViews, int count})? _best; // نصيحة V2
 
   // سلاسل الحلقات (V2)
@@ -126,6 +129,7 @@ class _StudioScreenState extends State<StudioScreen> {
         style: _style,
         duration: _duration,
         seriesContext: seriesContext,
+        hook: _chosenHook ?? '',
       ));
       var script = VideoScript.fromJson({
         ...json,
@@ -166,6 +170,22 @@ class _StudioScreenState extends State<StudioScreen> {
       _snack(errorMessage(e));
     } finally {
       if (mounted) setState(() => _loadingIdeas = false);
+    }
+  }
+
+  Future<void> _suggestHooks() async {
+    final api = await _api();
+    if (api == null) return;
+    setState(() => _loadingHooks = true);
+    try {
+      final json =
+          await api.askJson(Prompts.hooks(_category, _idea.text.trim()), maxTokens: 1000);
+      final list = (json['hooks'] as List?)?.map((e) => '$e').toList() ?? [];
+      setState(() => _hooks = list);
+    } catch (e) {
+      _snack(errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _loadingHooks = false);
     }
   }
 
@@ -275,6 +295,57 @@ class _StudioScreenState extends State<StudioScreen> {
                   }),
                 ),
               )),
+          // 🎣 اقتراح 3 hooks — نختار وحدة وتتبعث للتوليد (أهمّ حاجة: أول 3 ثواني)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: _loadingHooks ? null : _suggestHooks,
+              icon: _loadingHooks
+                  ? const SizedBox(
+                      width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.bolt_outlined),
+              label: Text(_loadingHooks ? 'نخمّم…' : 'اقترحلي 3 hooks 🎣'),
+            ),
+          ),
+          ..._hooks.map((h) => Card(
+                child: ListTile(
+                  leading: const Text('🎣'),
+                  title: Text(h),
+                  trailing: const Icon(Icons.add_circle_outline, color: AppColors.cyan),
+                  onTap: () => setState(() {
+                    _chosenHook = h;
+                    _hooks = [];
+                  }),
+                ),
+              )),
+          if (_chosenHook != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.cyan.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.cyan.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🎣 '),
+                    Expanded(
+                      child: Text('الـhook المختار: ${_chosenHook!}',
+                          style: const TextStyle(
+                              color: AppColors.cyan, fontWeight: FontWeight.w600)),
+                    ),
+                    IconButton(
+                      tooltip: 'شيل',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() => _chosenHook = null),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           _label('📺 سلسلة (اختياري)'),
           DropdownButtonFormField<String?>(
             initialValue: _series,

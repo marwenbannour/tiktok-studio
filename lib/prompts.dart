@@ -17,6 +17,7 @@ class Prompts {
     required String style,
     required int duration,
     String seriesContext = '',
+    String hook = '',
   }) =>
       '''$rules
 
@@ -25,6 +26,7 @@ class Prompts {
 - الفكرة: ${idea.isEmpty ? 'إختار إنت فكرة قوية وبسيطة تناسب مبتدئ' : idea}
 - طريقة الظهور: $style
 - المدّة: $duration ثانية بالضبط، format 9:16
+${hook.trim().isEmpty ? '' : '- الـhook (segment الأول، أول 3 ثواني) لازم يكون بالضبط: «${hook.trim()}» — ابنِ الباقي عليه.'}
 ${seriesContext.isEmpty ? '' : '''
 هذا جزء من سلسلة حلقات متواصلة. الحلقات اللي فاتت:
 $seriesContext
@@ -72,4 +74,12 @@ $all
 
 اقترح 5 أفكار فيديوهات TikTok قصيرة في موضوع: $category. كل فكرة جملة قصيرة بالدارجة التونسية، سهلة التصوير لمبتدئ.
 جاوب بـJSON برك: {"ideas":["...","..."]}''';
+
+  static String hooks(String category, String idea) => '''$rules
+
+المطلوب: 3 hooks مختلفة لفيديو TikTok في موضوع: $category.
+${idea.trim().isEmpty ? 'إختار إنت زاوية قوية تناسب مبتدئ.' : 'الفكرة: ${idea.trim()}'}
+الـhook هو أول 3 ثواني: جملة وحدة قصيرة (أقل من 12 كلمة) توقّف المشاهد وتمنعو يسكرولا.
+خلّي الـ3 مختلفين في الأسلوب (مثلا: سؤال مثير، نتيجة صادمة، غلطة شائعة، «شدّ بالك»...).
+جاوب بـJSON برك: {"hooks":["...","...","..."]}''';
 }
