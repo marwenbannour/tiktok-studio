@@ -6,6 +6,7 @@ import '../prompts.dart';
 import '../storage.dart';
 import '../theme.dart';
 import '../widgets/neon.dart';
+import 'ab_screen.dart';
 import 'result_screen.dart';
 
 class StudioScreen extends StatefulWidget {
@@ -151,6 +152,58 @@ class _StudioScreenState extends State<StudioScreen> {
         MaterialPageRoute(builder: (_) => ResultScreen(script: saved)),
       );
       _loadInsight(); // يمكن دخّل إحصائيات في شاشة النتيجة
+    } catch (e) {
+      _snack(errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// A/B: نسختين بـhooks مختلفة باش تجرّب أنهي أحسن.
+  Future<void> _generateAB() async {
+    final api = await _api();
+    if (api == null) return;
+    final cap = await AppStorage.getGenCap();
+    if (cap > 0 && await AppStorage.genCount() >= cap) {
+      _snack('وصلت الحدّ الشهري ($cap توليدة). بدّلو في «الإعدادات».');
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final idea = _idea.text.trim();
+      // نجيبو hooks (نبداو بالمختار كان فمّا)
+      final hooks = <String>[if (_chosenHook != null) _chosenHook!.trim()];
+      final hj = await api.askJson(Prompts.hooks(_category, idea), maxTokens: 1000);
+      hooks.addAll((hj['hooks'] as List?)?.map((e) => '$e'.trim()).toList() ?? []);
+      final uniq = hooks.where((h) => h.isNotEmpty).toSet().toList();
+      if (uniq.length < 2) {
+        throw ClaudeException('ما نجّمناش نجيبو زوز hooks مختلفة. عاود جرّب.');
+      }
+      // نولّدو الزوز سكريبتات بالتوازي
+      final results = await Future.wait([
+        api.askJson(Prompts.script(
+            category: _category, idea: idea, style: _style, duration: _duration, hook: uniq[0])),
+        api.askJson(Prompts.script(
+            category: _category, idea: idea, style: _style, duration: _duration, hook: uniq[1])),
+      ]);
+      VideoScript build(Map<String, dynamic> json) => VideoScript.fromJson({
+            ...json,
+            'category': _category,
+            'style': _style,
+            'duration': _duration,
+            'createdAt': DateTime.now().millisecondsSinceEpoch,
+          });
+      final a = build(results[0]);
+      final b = build(results[1]);
+      if (a.segments.isEmpty || b.segments.isEmpty) {
+        throw ClaudeException('جا جواب ناقص. عاود جرّب.');
+      }
+      await AppStorage.incrementGenCount();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ABScreen(a: a, b: b)),
+      );
+      _loadInsight();
     } catch (e) {
       _snack(errorMessage(e));
     } finally {
@@ -391,6 +444,12 @@ class _StudioScreenState extends State<StudioScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.movie_creation),
             label: _loading ? 'نحضّر… (20–60 ثانية)' : 'حضّرلي الفيديو',
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _loading ? null : _generateAB,
+            icon: const Icon(Icons.compare_arrows),
+            label: const Text('جرّب نسختين A/B 🆎'),
           ),
         ],
       ),
