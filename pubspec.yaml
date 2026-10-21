@@ -23,6 +23,7 @@ dependencies:
   drift: ^2.35.2
   drift_flutter: ^0.3.1
   wakelock_plus: ^1.5.2
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

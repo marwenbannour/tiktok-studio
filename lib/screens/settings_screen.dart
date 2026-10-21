@@ -22,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _token = TextEditingController();
   final _supaUrl = TextEditingController();
   final _supaAnon = TextEditingController();
+  final _googleId = TextEditingController();
   bool _obscure = true;
   bool _obscureToken = true;
   bool _obscureAnon = true;
@@ -46,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final token = await AppStorage.getAppToken();
     final supaUrl = await AppStorage.getSupabaseUrl();
     final supaAnon = await AppStorage.getSupabaseAnonKey();
+    final googleId = await AppStorage.getGoogleClientId();
     final email = await Auth.email;
     if (!mounted) return;
     setState(() {
@@ -59,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _token.text = token ?? '';
       _supaUrl.text = supaUrl ?? '';
       _supaAnon.text = supaAnon ?? '';
+      _googleId.text = googleId ?? '';
       _accountEmail = email;
     });
   }
@@ -72,11 +75,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _token.dispose();
     _supaUrl.dispose();
     _supaAnon.dispose();
+    _googleId.dispose();
     super.dispose();
   }
 
   Future<void> _saveSupaConfig() async {
     await AppStorage.setSupabaseConfig(_supaUrl.text, _supaAnon.text);
+    await AppStorage.setGoogleClientId(_googleId.text);
     if (!mounted) return;
     FocusScope.of(context).unfocus();
     _snack(_supaUrl.text.trim().isEmpty
@@ -432,6 +437,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icon(_obscureAnon ? Icons.visibility : Icons.visibility_off),
                   onPressed: () => setState(() => _obscureAnon = !_obscureAnon),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              controller: _googleId,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                hintText: 'Google Web Client ID (اختياري — للدخول بـGoogle)',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
             ),
           ),

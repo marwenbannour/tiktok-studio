@@ -84,6 +84,20 @@ class AppStorage {
   static const _supaUrlName = 'supabase_url';
   static const _supaAnonName = 'supabase_anon';
   static const _sessionName = 'supabase_session';
+  static const _googleIdName = 'google_web_client_id';
+
+  // Google Web Client ID (عمومي، موش سرّي) — يلزمو google_sign_in باش يجيب id_token
+  static Future<String?> getGoogleClientId() async {
+    final p = await SharedPreferences.getInstance();
+    final c = p.getString(_googleIdName)?.trim();
+    return (c == null || c.isEmpty) ? null : c;
+  }
+
+  static Future<void> setGoogleClientId(String? id) async {
+    final p = await SharedPreferences.getInstance();
+    final v = id?.trim() ?? '';
+    v.isEmpty ? await p.remove(_googleIdName) : await p.setString(_googleIdName, v);
+  }
 
   static Future<String?> getSupabaseUrl() async {
     final p = await SharedPreferences.getInstance();

@@ -60,6 +60,23 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      final ok = await Auth.signInWithGoogle();
+      if (!mounted) return;
+      if (ok) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -114,6 +131,23 @@ class _AuthScreenState extends State<AuthScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(_signup ? 'اعمل الحساب' : 'ادخل'),
+          ),
+          const SizedBox(height: 14),
+          Row(children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text('ولا', style: tt.bodySmall),
+            ),
+            const Expanded(child: Divider()),
+          ]),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _google,
+            icon: const Text('G',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.cyan)),
+            label: const Text('دخول بـGoogle'),
           ),
           if (_error != null)
             Padding(

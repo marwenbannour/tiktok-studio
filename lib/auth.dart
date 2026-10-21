@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 import 'storage.dart';
@@ -48,7 +49,41 @@ class Auth {
     await _saveSession(body);
   }
 
-  static Future<void> signOut() => AppStorage.setSession(null);
+  /// دخول بـGoogle (native) → id_token → Supabase.
+  /// يرجّع true كان دخل، false كان ألغى.
+  static Future<bool> signInWithGoogle() async {
+    final c = await _config();
+    if (c == null) throw AuthException(_noConfig);
+    final clientId = await AppStorage.getGoogleClientId();
+    if (clientId == null || clientId.isEmpty) {
+      throw AuthException('زيد Google Web Client ID في «الإعدادات» قبل.');
+    }
+    final google = GoogleSignIn(serverClientId: clientId, scopes: const ['email', 'profile']);
+    GoogleSignInAccount? account;
+    try {
+      account = await google.signIn();
+    } catch (_) {
+      throw AuthException('ما نجّمناش ندخلو بـGoogle. ثبّت في الإعدادات.');
+    }
+    if (account == null) return false; // ألغى المستخدم
+    final gauth = await account.authentication;
+    final idToken = gauth.idToken;
+    if (idToken == null) {
+      throw AuthException('ما وصلناش id token من Google. ثبّت في Web Client ID.');
+    }
+    final body = await _post(
+        c, '/auth/v1/token?grant_type=id_token', {'provider': 'google', 'id_token': idToken});
+    await _saveSession(body);
+    return true;
+  }
+
+  static Future<void> signOut() async {
+    // نخرجو زادة من Google باش المرّة الجاية يسأل الحساب
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+    await AppStorage.setSession(null);
+  }
 
   /// access token صالح (يعمل refresh كان قرب يفوت). null كان ما فماش login.
   static Future<String?> validToken() async {

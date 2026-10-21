@@ -116,7 +116,21 @@ curl -i -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/generate" \
 الـ`anon key` عمومي (يتحطّ فالتطبيق بلا مشكل)؛ البيانات محميّة بـRLS (JWT المستخدم).
 المفتاح السرّي الوحيد يبقى `OLLAMA_API_KEY` فالـEdge Function.
 
+### الدخول بـGoogle (اختياري)
+
+التطبيق يدعم دخول Google (native `google_sign_in` → id_token → Supabase).
+الإعداد:
+
+1. **Google Cloud Console** → APIs & Services → Credentials → OAuth client IDs:
+   - **Web client** (هذا اللي يتحطّ فالتطبيق كـ«Web Client ID»).
+   - **Android client**: package `com.bannour.tiktok_studio` + بصمة **SHA-1**
+     (`keytool -list -v -keystore upload-keystore.jks -alias upload`، وزيد بصمة الـdebug للتجربة).
+2. **Supabase** → Authentication → Providers → **Google** → فعّلو، وحطّ
+   الـ**Web client ID** + **secret**.
+3. فالتطبيق → الإعدادات → الحساب والمزامنة → خانة **Google Web Client ID** → حطّ
+   الـWeb client ID، سجّل، وبعد **«دخول بـGoogle»**.
+
 ## الخطوة الجاية
 
-- Google sign-in.
+- مزامنة تلقائية (كل توليد يترفع).
 - حدّ شهري من جهة السيرفر (جدول عدّاد لكل مستخدم).
