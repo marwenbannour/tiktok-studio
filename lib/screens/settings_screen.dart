@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../auth.dart';
 import '../backup_io.dart';
 import '../storage.dart';
+import '../sync.dart';
+import '../theme.dart';
+import 'auth_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -16,11 +20,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _cap = TextEditingController();
   final _backend = TextEditingController();
   final _token = TextEditingController();
+  final _supaUrl = TextEditingController();
+  final _supaAnon = TextEditingController();
   bool _obscure = true;
   bool _obscureToken = true;
+  bool _obscureAnon = true;
   String _model = AppStorage.defaultModel;
   int _count = 0;
   bool _busyBackup = false;
+  bool _busySync = false;
+  String? _accountEmail; // الإيميل كان داخل، ولا null
 
   @override
   void initState() {
@@ -35,6 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final count = await AppStorage.genCount();
     final backend = await AppStorage.getBackendUrl();
     final token = await AppStorage.getAppToken();
+    final supaUrl = await AppStorage.getSupabaseUrl();
+    final supaAnon = await AppStorage.getSupabaseAnonKey();
+    final email = await Auth.email;
     if (!mounted) return;
     setState(() {
       _key.text = k ?? '';
@@ -45,6 +57,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _count = count;
       _backend.text = backend ?? '';
       _token.text = token ?? '';
+      _supaUrl.text = supaUrl ?? '';
+      _supaAnon.text = supaAnon ?? '';
+      _accountEmail = email;
     });
   }
 
@@ -55,7 +70,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cap.dispose();
     _backend.dispose();
     _token.dispose();
+    _supaUrl.dispose();
+    _supaAnon.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveSupaConfig() async {
+    await AppStorage.setSupabaseConfig(_supaUrl.text, _supaAnon.text);
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    _snack(_supaUrl.text.trim().isEmpty
+        ? 'تشالو إعدادات Supabase.'
+        : 'تسجّلو إعدادات Supabase ✅');
+  }
+
+  Future<void> _login() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+    );
+    if (ok == true) {
+      await _load();
+      if (mounted) _snack('مرحبا بيك ✅ تنجّم تزامن سكريبتاتك.');
+    }
+  }
+
+  Future<void> _logout() async {
+    await Auth.signOut();
+    if (!mounted) return;
+    setState(() => _accountEmail = null);
+    _snack('خرجت من الحساب. السكريبتات تبقى محلّيًا.');
+  }
+
+  Future<void> _sync() async {
+    setState(() => _busySync = true);
+    try {
+      final r = await Sync.syncAll();
+      if (mounted) {
+        _snack('تزامنو: رفعنا ${r.pushed}، جبنا ${r.added} جداد ✅');
+      }
+    } on SyncException catch (e) {
+      if (mounted) _snack(e.message);
+    } catch (e) {
+      if (mounted) _snack('المزامنة فشلت. عاود جرّب.');
+    } finally {
+      if (mounted) setState(() => _busySync = false);
+    }
   }
 
   Future<void> _saveBackend() async {
@@ -333,6 +392,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: EdgeInsets.only(top: 12),
               child: Center(child: CircularProgressIndicator()),
             ),
+          const SizedBox(height: 28),
+          Text('الحساب والمزامنة', style: tt.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'بحساب Supabase تنجّم تزامن سكريبتاتك على كل أجهزتك (الـhistorique يتحفظ '
+            'فالسحابة والـSQLite المحلّي يبقى cache). أول حاجة حطّ إعدادات Supabase '
+            '(URL + anon key من Project Settings ← API).',
+            style: tt.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              controller: _supaUrl,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                hintText: 'https://xxxx.supabase.co',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              controller: _supaAnon,
+              obscureText: _obscureAnon,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                hintText: 'anon public key',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureAnon ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setState(() => _obscureAnon = !_obscureAnon),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton(
+              onPressed: _saveSupaConfig, child: const Text('سجّل إعدادات Supabase')),
+          const SizedBox(height: 16),
+          if (_accountEmail == null)
+            OutlinedButton.icon(
+              onPressed: _login,
+              icon: const Icon(Icons.login),
+              label: const Text('ادخل / اعمل حساب'),
+            )
+          else ...[
+            Row(
+              children: [
+                const Icon(Icons.account_circle, color: AppColors.cyan),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_accountEmail!,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                TextButton(onPressed: _logout, child: const Text('اخرج')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _busySync ? null : _sync,
+              icon: _busySync
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.sync),
+              label: Text(_busySync ? 'نزامن…' : 'زامن الآن'),
+            ),
+          ],
         ],
       ),
     );

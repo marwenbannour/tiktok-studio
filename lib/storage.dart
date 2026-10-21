@@ -78,6 +78,52 @@ class AppStorage {
     }
   }
 
+  // ---- حساب Supabase (Auth + مزامنة) ----
+  // URL + anon key موش سرّيين (public، RLS يحمي البيانات) → prefs.
+  // الـsession (tokens) سرّية → مشفّرة.
+  static const _supaUrlName = 'supabase_url';
+  static const _supaAnonName = 'supabase_anon';
+  static const _sessionName = 'supabase_session';
+
+  static Future<String?> getSupabaseUrl() async {
+    final p = await SharedPreferences.getInstance();
+    final u = p.getString(_supaUrlName)?.trim();
+    return (u == null || u.isEmpty) ? null : u;
+  }
+
+  static Future<String?> getSupabaseAnonKey() async {
+    final p = await SharedPreferences.getInstance();
+    final k = p.getString(_supaAnonName)?.trim();
+    return (k == null || k.isEmpty) ? null : k;
+  }
+
+  static Future<void> setSupabaseConfig(String? url, String? anon) async {
+    final p = await SharedPreferences.getInstance();
+    final u = url?.trim() ?? '', a = anon?.trim() ?? '';
+    u.isEmpty ? await p.remove(_supaUrlName) : await p.setString(_supaUrlName, u);
+    a.isEmpty ? await p.remove(_supaAnonName) : await p.setString(_supaAnonName, a);
+  }
+
+  /// الـsession محفوظة (JSON: access_token, refresh_token, user_id, email) ولا null
+  static Future<Map<String, dynamic>?> getSession() async {
+    try {
+      final raw = await _secure.read(key: _sessionName);
+      if (raw == null || raw.isEmpty) return null;
+      return Map<String, dynamic>.from(jsonDecode(raw));
+    } catch (e) {
+      debugPrint('getSession: $e');
+      return null;
+    }
+  }
+
+  static Future<void> setSession(Map<String, dynamic>? session) async {
+    if (session == null) {
+      await _secure.delete(key: _sessionName);
+    } else {
+      await _secure.write(key: _sessionName, value: jsonEncode(session));
+    }
+  }
+
   // ---- الموديل ----
   static Future<String> getModel() async {
     final p = await SharedPreferences.getInstance();

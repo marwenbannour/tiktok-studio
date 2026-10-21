@@ -95,7 +95,28 @@ curl -i -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/generate" \
 - حطّ **حدّ إنفاق شهري** في console متاع ollama.com برضو.
 - السقف الأعلى للـ`num_predict` محدّد في [`index.ts`](supabase/functions/generate/index.ts) (`MAX_NUM_PREDICT`).
 
-## الخطوة الجاية (مرحلة أخرى)
+## الحسابات ومزامنة الـhistorique (V2)
 
-- حسابات مستخدمين (Supabase Auth) + مزامنة الـhistorique في Postgres.
-- حدّ شهري من جهة السيرفر (جدول عدّاد لكل token/مستخدم).
+التطبيق ينجّم يزامن السكريبتات بين الأجهزة عبر **Supabase Auth** + جدول `scripts`
+(RLS: كل مستخدم يشوف سكريبتاتو برك). يستعمل Supabase REST مباشرة (بلا package إضافي).
+
+**الإعداد:**
+
+1. طبّق الـmigrations (تعمل جدول `scripts` + `usage_log`):
+   ```bash
+   supabase db push   # يطبّق supabase/migrations/*.sql
+   ```
+2. في Supabase → **Authentication → Providers** → فعّل **Email**.
+   (كان تحب بلا تأكيد إيميل: Authentication → Settings → عطّل "Confirm email".)
+3. في التطبيق → **الإعدادات → الحساب والمزامنة**:
+   - **URL**: `https://<PROJECT_REF>.supabase.co`
+   - **anon key**: من Project Settings → API (مفتاح `anon` `public` — موش سرّي، RLS يحمي).
+4. اعمل حساب / ادخل، وبعد **«زامن الآن»**.
+
+الـ`anon key` عمومي (يتحطّ فالتطبيق بلا مشكل)؛ البيانات محميّة بـRLS (JWT المستخدم).
+المفتاح السرّي الوحيد يبقى `OLLAMA_API_KEY` فالـEdge Function.
+
+## الخطوة الجاية
+
+- Google sign-in.
+- حدّ شهري من جهة السيرفر (جدول عدّاد لكل مستخدم).
