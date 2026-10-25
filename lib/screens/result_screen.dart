@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'plan_editor.dart';
 import 'segment_editor.dart';
 import 'stats_editor.dart';
+import 'capcut_screen.dart';
 import 'teleprompter_screen.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -58,6 +59,10 @@ class _ResultScreenState extends State<ResultScreen> {
         _togglePublished();
       case 'stats':
         _editStats();
+      case 'capcut':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => CapCutScreen(script: script)),
+        );
       default:
         _share(what);
     }
@@ -135,6 +140,7 @@ class _ResultScreenState extends State<ResultScreen> {
             tooltip: 'المزيد',
             onSelected: _onMenu,
             itemBuilder: (_) => [
+              const PopupMenuItem(value: 'capcut', child: Text('🎬 إلى CapCut (مونتاج)')),
               const PopupMenuItem(value: 'script', child: Text('📝 شارك السكريبت كامل')),
               const PopupMenuItem(value: 'caption', child: Text('📲 شارك الـcaption')),
               const PopupMenuItem(value: 'txt', child: Text('📄 صدّر fichier .txt')),
