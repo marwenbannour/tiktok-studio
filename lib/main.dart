@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'screens/history_screen.dart';
 import 'screens/plans_screen.dart';
@@ -7,7 +8,12 @@ import 'screens/splash_screen.dart';
 import 'screens/studio_screen.dart';
 import 'theme.dart';
 
-void main() => runApp(const TikTokStudioApp());
+void main() {
+  // الخطوط مدمجة (google_fonts/) → ما نجيبوهمش من الإنترنت.
+  // cold start أسرع + يخدم offline، وما يطيحش التست على émulateur بلا شبكة.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  runApp(const TikTokStudioApp());
+}
 
 class TikTokStudioApp extends StatelessWidget {
   const TikTokStudioApp({super.key});

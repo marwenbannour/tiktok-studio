@@ -37,3 +37,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # خطوط Poppins مدمجة (bundled) → google_fonts يستعملهم بلا إنترنت
+  # (cold start أسرع + يخدم offline — NFR «connexion instable»، وما يطيحش التست)
+  assets:
+    - google_fonts/

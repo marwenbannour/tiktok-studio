@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
@@ -202,6 +203,8 @@ void main() {
   });
 
   setUp(() async {
+    // الخطوط مدمجة → ما نجيبوهمش من الإنترنت (التست ما يطيحش بلا شبكة)
+    GoogleFonts.config.allowRuntimeFetching = false;
     await _resetStorage();
     // قاعدة في الذاكرة لكل تست (ما نلوّثوش قاعدة المستعمل الحقيقية)
     AppDatabase.instance = AppDatabase.forTesting(NativeDatabase.memory());
