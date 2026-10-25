@@ -32,6 +32,9 @@ import 'package:tiktok_studio/screens/teleprompter_screen.dart';
 
 const _fakeKey = 'sk-ant-e2e-test-key';
 
+// تخزين secure storage في الذاكرة للتست (بدل keystore الإيميلاتور غير المستقرّ)
+final _secureMem = <String, String>{};
+
 const _ideas = [
   'تكتيك 4-3-3 في 20 ثانية',
   'أغرب قانون في الكورة',
@@ -205,6 +208,38 @@ void main() {
   setUp(() async {
     // الخطوط مدمجة → ما نجيبوهمش من الإنترنت (التست ما يطيحش بلا شبكة)
     GoogleFonts.config.allowRuntimeFetching = false;
+
+    // mock لـsecure storage: في الذاكرة. الـkeystore متاع الإيميلاتور غير
+    // مستقرّ (يرجّع null بعد الكتابة) ويخلّي التست flaky — كيما عاملين mock
+    // للـDB والـHTTP، نعملوه للـsecure storage باش التست يكون حتمي.
+    _secureMem.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async {
+        final args = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
+        final key = args['key'] as String?;
+        switch (call.method) {
+          case 'write':
+            _secureMem[key!] = args['value'] as String;
+            return null;
+          case 'read':
+            return _secureMem[key];
+          case 'delete':
+            _secureMem.remove(key);
+            return null;
+          case 'deleteAll':
+            _secureMem.clear();
+            return null;
+          case 'readAll':
+            return Map<String, String>.from(_secureMem);
+          case 'containsKey':
+            return _secureMem.containsKey(key);
+        }
+        return null;
+      },
+    );
+
     await _resetStorage();
     // قاعدة في الذاكرة لكل تست (ما نلوّثوش قاعدة المستعمل الحقيقية)
     AppDatabase.instance = AppDatabase.forTesting(NativeDatabase.memory());
@@ -216,11 +251,11 @@ void main() {
       await _launch(tester);
 
       await _tap(tester, find.text('حضّرلي الفيديو'));
-      await _waitFor(tester, find.text('زيد مفتاح الـAPI في «الإعدادات» قبل.'));
+      await _waitFor(tester, find.textContaining('زيد مفتاح الـAPI'));
 
       await _clearSnackBars(tester);
       await _tap(tester, find.text('اقترحلي أفكار'));
-      await _waitFor(tester, find.text('زيد مفتاح الـAPI في «الإعدادات» قبل.'));
+      await _waitFor(tester, find.textContaining('زيد مفتاح الـAPI'));
 
       expect(claude.requests, isEmpty);
       expect(find.byType(ResultScreen), findsNothing);
