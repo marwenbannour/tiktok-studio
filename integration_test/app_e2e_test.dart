@@ -731,7 +731,15 @@ void main() {
       // نرجعو لحضّر → نصيحة أحسن نوع تبان
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await _waitFor(tester, find.textContaining('يخدم مليح عندك'));
+      // الـinsight يتحمّل async؛ نستنّاه. وبما إنّا سكرولنا لتحت باش نلقاو زرّ
+      // التوليد، نعاودو نسكرولو لفوق باش الـbanner (في القمّة، ListView lazy) يتبنى.
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final insight = find.textContaining('يخدم مليح عندك');
+      await tester.scrollUntilVisible(insight, -250,
+          scrollable: _in<StudioScreen>(find.byType(Scrollable)).first, maxScrolls: 25);
+      expect(insight, findsOneWidget);
     }, () => claude.client);
   });
 
