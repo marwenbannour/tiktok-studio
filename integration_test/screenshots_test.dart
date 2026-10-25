@@ -139,6 +139,13 @@ void main() {
       await tester.pumpAndSettle();
       await shot(tester, '2_result');
 
+      // 9) جسر CapCut (من منيو ⋮)
+      await tapVisible(tester, find.byTooltip('المزيد'));
+      await tapVisible(tester, find.text('🎬 إلى CapCut (مونتاج)'));
+      await shot(tester, '9_capcut');
+      await tester.pageBack(); // نرجعو للنتيجة
+      await tester.pumpAndSettle();
+
       // 6) تسجيل بالكاميرا (Teleprompter → 🎥) — الأذونات تتعطا بالتوازي عبر adb
       await tapVisible(tester, find.text('Teleprompter')); // FAB فـ ResultScreen
       final camBtn = find.byTooltip('سجّل بالكاميرا');
