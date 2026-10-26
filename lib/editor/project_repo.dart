@@ -97,6 +97,52 @@ class ProjectRepo {
     return dest.path;
   }
 
+  /// V05: يحذف clip ويعاود يرتّب مسار الفيديو + يحدّث المدّة.
+  static Future<void> deleteClip({
+    required int projectId,
+    required int clipId,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    await d.removeClip(clipId);
+    await _resequenceVideo(projectId, d);
+  }
+
+  /// V05: يقصّ clip فيديو (يبدّل المدّة الظاهرة outMs) ويعاود يرتّب المسار.
+  static Future<void> trimVideoClip({
+    required int projectId,
+    required int clipId,
+    required int outMs,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final safe = outMs < 200 ? 200 : outMs; // أدنى 0.2s
+    await d.updateClip(clipId, ClipsCompanion(outMs: Value(safe)));
+    await _resequenceVideo(projectId, d);
+  }
+
+  /// يخلّي clips الفيديو ملصوقين بالترتيب (بلا فراغات) ويحدّث مدّة المشروع.
+  static Future<void> _resequenceVideo(int projectId, AppDatabase d) async {
+    final clips = await d.projectClips(projectId);
+    final videos = clips.where((c) => c.track == 'video').toList()
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    var cursor = 0;
+    for (final v in videos) {
+      if (v.startMs != cursor) {
+        await d.updateClip(v.id, ClipsCompanion(startMs: Value(cursor)));
+      }
+      cursor += v.outMs > 0 ? v.outMs : 0;
+    }
+    // المدّة = أقصى نهاية بين كل الـclips (فيديو + نصوص/ترجمة)
+    var maxEnd = cursor;
+    for (final c in clips) {
+      if (c.track == 'video') continue;
+      final end = c.startMs + (c.outMs > 0 ? c.outMs : 0);
+      if (end > maxEnd) maxEnd = end;
+    }
+    await d.touchProject(projectId, durationMs: maxEnd);
+  }
+
   static Future<List<Project>> all({AppDatabase? db}) => _resolve(db).allProjects();
   static Future<Project?> byId(int id, {AppDatabase? db}) => _resolve(db).projectById(id);
   static Future<List<Clip>> clips(int id, {AppDatabase? db}) =>

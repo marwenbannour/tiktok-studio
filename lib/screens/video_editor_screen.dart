@@ -107,6 +107,69 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
+  /// V05: يحرّر clip فيديو — قصّ المدّة (trim) ولا فسخ.
+  Future<void> _editVideoClip(Clip clip) async {
+    var outMs = (clip.outMs > 0 ? clip.outMs : 1000).toDouble();
+    final maxMs = outMs; // المدّة الأصلية = الحدّ الأقصى للقصّ
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(clip.sourcePath?.split('/').last ?? 'clip',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Text('✂️ المدّة: ${(outMs / 1000).toStringAsFixed(1)}s'),
+              Slider(
+                value: outMs,
+                min: 200,
+                max: maxMs < 200 ? 200 : maxMs,
+                onChanged: (v) => setSheet(() => outMs = v),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      icon: const Icon(Icons.delete_outline, color: AppColors.rose),
+                      label: const Text('فسخ', style: TextStyle(color: AppColors.rose)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      icon: const Icon(Icons.content_cut),
+                      label: const Text('قصّ'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (changed == null) return; // تسكّر بلا اختيار
+    if (changed) {
+      await ProjectRepo.trimVideoClip(
+          projectId: widget.projectId, clipId: clip.id, outMs: outMs.round());
+    } else {
+      await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
+      await _preview?.dispose();
+      _preview = null;
+    }
+    await _load();
+  }
+
   String _clipLabel(Clip c) {
     if (c.sourcePath != null) return c.sourcePath!.split('/').last;
     try {
@@ -253,23 +316,26 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                             .clamp(10, w),
                         top: 0,
                         bottom: 0,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          decoration: BoxDecoration(
-                            color: track == 'video'
-                                ? AppColors.rose.withValues(alpha: 0.22)
-                                : AppColors.cyan.withValues(alpha: 0.22),
-                            borderRadius: BorderRadius.circular(5),
-                            border: Border.all(
-                                color: (track == 'video' ? AppColors.rose : AppColors.cyan)
-                                    .withValues(alpha: 0.5)),
+                        child: GestureDetector(
+                          onTap: track == 'video' ? () => _editVideoClip(clip) : null,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: BoxDecoration(
+                              color: track == 'video'
+                                  ? AppColors.rose.withValues(alpha: 0.22)
+                                  : AppColors.cyan.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(
+                                  color: (track == 'video' ? AppColors.rose : AppColors.cyan)
+                                      .withValues(alpha: 0.5)),
+                            ),
+                            alignment: Alignment.centerRight,
+                            child: Text(_clipLabel(clip),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: AppColors.textHigh)),
                           ),
-                          alignment: Alignment.centerRight,
-                          child: Text(_clipLabel(clip),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textHigh)),
                         ),
                       ),
                   ],

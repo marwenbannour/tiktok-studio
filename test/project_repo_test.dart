@@ -88,4 +88,47 @@ void main() {
     final p = await ProjectRepo.byId(pid, db: db);
     expect(p!.durationMs, 20000);
   });
+
+  test('deleteClip: يفسخ clip فيديو ويعاود يلصق الباقي', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 3000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/c.mp4', durationMs: 5000, db: db);
+
+    // نفسخو الوسط (/b.mp4 اللي يبدا فـ3000)
+    final mid = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/b.mp4');
+    await ProjectRepo.deleteClip(projectId: pid, clipId: mid.id, db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    expect(vids.map((v) => v.sourcePath), ['/a.mp4', '/c.mp4']);
+    expect(vids[0].startMs, 0); // a: 0..3000
+    expect(vids[1].startMs, 3000); // c ملصوق ورا a (بلا فراغ)
+  });
+
+  test('trimVideoClip: يقصّ المدّة ويعاود يلصق اللي وراه', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 6000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+    await ProjectRepo.trimVideoClip(
+        projectId: pid, clipId: a.id, outMs: 2000, db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    expect(vids[0].outMs, 2000);
+    expect(vids[1].startMs, 2000); // b انزاح ورا a المقصوص
+  });
 }
