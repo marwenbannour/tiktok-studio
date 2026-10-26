@@ -193,10 +193,17 @@ class ProjectRepo {
     await d.touchProject(projectId, durationMs: maxEnd);
   }
 
-  /// V21: يبني payload الـexport من clips المشروع — نقي وقابل للاختبار.
-  /// clips (فيديو مرتّبين) + overlays (نصّ/ترجمة موقّتين على الـtimeline العامّ).
-  static Future<({List<Map<String, Object>> clips, List<Map<String, Object>> overlays})>
-      buildExportPlan(int projectId, {AppDatabase? db}) async {
+  /// حجم صوت الموسيقى الافتراضي تحت الـvoix off.
+  static const double defaultMusicVolume = 0.35;
+
+  /// V21/V11/V12: يبني payload الـexport من clips المشروع — نقي وقابل للاختبار.
+  /// clips (فيديو) + overlays (نصّ/ترجمة موقّتين) + audio (voix off + موسيقى).
+  static Future<
+      ({
+        List<Map<String, Object>> clips,
+        List<Map<String, Object>> overlays,
+        List<Map<String, Object>> audio,
+      })> buildExportPlan(int projectId, {AppDatabase? db}) async {
     final all = await _resolve(db).projectClips(projectId);
 
     final clips = <Map<String, Object>>[];
@@ -227,7 +234,29 @@ class ProjectRepo {
         if (style['bg'] != null) 'bg': style['bg'] as Object,
       });
     }
-    return (clips: clips, overlays: overlays);
+
+    final audio = <Map<String, Object>>[];
+    for (final c in all.where((c) =>
+        (c.track == 'voice' || c.track == 'music') && c.sourcePath != null)) {
+      audio.add({
+        'path': c.sourcePath!,
+        'inMs': c.inMs,
+        'outMs': c.outMs > 0 ? c.outMs : c.inMs,
+        'startMs': c.startMs,
+        'kind': c.track, // 'voice' | 'music'
+        'volume': volumeOf(c),
+      });
+    }
+    return (clips: clips, overlays: overlays, audio: audio);
+  }
+
+  /// حجم صوت clip (props['volume'])، مع افتراضي: voix off 1.0، موسيقى 0.35.
+  static double volumeOf(Clip c) {
+    try {
+      final v = jsonDecode(c.props)['volume'];
+      if (v is num) return v.toDouble();
+    } catch (_) {}
+    return c.track == 'music' ? defaultMusicVolume : 1.0;
   }
 
   /// V08: تنسيق النصّ لـclip (نصّ/ترجمة) مع قيم افتراضية حسب النوع.
@@ -257,6 +286,66 @@ class ProjectRepo {
     });
     await _resolve(db)
         .updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(clean))));
+  }
+
+  /// V11: يزيد clip voix off — يُلحَق ورا آخر تسجيل صوت (متسلسل).
+  static Future<void> addVoiceClip({
+    required int projectId,
+    required String sourcePath,
+    required int durationMs,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final voices = (await d.projectClips(projectId)).where((c) => c.track == 'voice');
+    final startMs = voices.fold<int>(0, (acc, c) => acc + clipDuration(c));
+    await d.addClip(ClipsCompanion.insert(
+      projectId: projectId,
+      track: 'voice',
+      sourcePath: Value(sourcePath),
+      startMs: startMs,
+      outMs: Value(durationMs),
+      props: Value(jsonEncode({'volume': 1.0})),
+    ));
+    await touchDuration(projectId, db: d);
+  }
+
+  /// V12: يحطّ clip موسيقى خلفية يبدا من 0 (يبدّل الموجودة — موسيقى وحدة).
+  static Future<void> setMusic({
+    required int projectId,
+    required String sourcePath,
+    required int durationMs,
+    double volume = defaultMusicVolume,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    for (final m in (await d.projectClips(projectId)).where((c) => c.track == 'music')) {
+      await d.removeClip(m.id);
+    }
+    await d.addClip(ClipsCompanion.insert(
+      projectId: projectId,
+      track: 'music',
+      sourcePath: Value(sourcePath),
+      startMs: 0,
+      outMs: Value(durationMs),
+      props: Value(jsonEncode({'volume': volume})),
+    ));
+    await touchDuration(projectId, db: d);
+  }
+
+  /// يحدّث حجم صوت clip (voix off / موسيقى).
+  static Future<void> setVolume(int clipId, double volume, {AppDatabase? db}) =>
+      _resolve(db)
+          .updateClip(clipId, ClipsCompanion(props: Value(jsonEncode({'volume': volume}))));
+
+  /// يعيد حساب مدّة المشروع من أقصى نهاية clip.
+  static Future<void> touchDuration(int projectId, {AppDatabase? db}) async {
+    final d = _resolve(db);
+    var maxEnd = 0;
+    for (final c in await d.projectClips(projectId)) {
+      final end = c.startMs + clipDuration(c);
+      if (end > maxEnd) maxEnd = end;
+    }
+    await d.touchProject(projectId, durationMs: maxEnd);
   }
 
   /// يسجّل مسار آخر export فالمشروع.

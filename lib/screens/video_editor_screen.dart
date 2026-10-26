@@ -123,6 +123,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       final r = await VideoEngine.exportComposition(
         clips: plan.clips,
         overlays: plan.overlays,
+        audio: plan.audio,
         output: out,
         width: p.width,
         height: p.height,

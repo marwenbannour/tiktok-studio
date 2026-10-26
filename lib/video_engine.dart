@@ -35,6 +35,7 @@ class VideoEngine {
   static Future<({int ms, String output})> exportComposition({
     required List<Map<String, Object>> clips,
     required List<Map<String, Object>> overlays,
+    List<Map<String, Object>> audio = const [],
     required String output,
     int width = 1080,
     int height = 1920,
@@ -42,6 +43,7 @@ class VideoEngine {
     final r = await _ch.invokeMapMethod<String, dynamic>('exportComposition', {
       'clips': clips,
       'overlays': overlays,
+      'audio': audio,
       'output': output,
       'width': width,
       'height': height,

@@ -273,4 +273,55 @@ void main() {
     expect(ov['size'], 72);
     expect(ov['align'], 'right');
   });
+
+  test('addVoiceClip: voix off تتسلسل + volume=1.0 افتراضي', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVoiceClip(
+        projectId: pid, sourcePath: '/v1.m4a', durationMs: 3000, db: db);
+    await ProjectRepo.addVoiceClip(
+        projectId: pid, sourcePath: '/v2.m4a', durationMs: 2000, db: db);
+
+    final voices = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'voice')
+        .toList()
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    expect(voices.length, 2);
+    expect(voices[0].startMs, 0);
+    expect(voices[1].startMs, 3000); // ملحوقة ورا الأولى
+    expect(ProjectRepo.volumeOf(voices[0]), 1.0);
+  });
+
+  test('setMusic: موسيقى وحدة من 0 + volume افتراضي 0.35', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.setMusic(
+        projectId: pid, sourcePath: '/m1.mp3', durationMs: 20000, db: db);
+    await ProjectRepo.setMusic(
+        projectId: pid, sourcePath: '/m2.mp3', durationMs: 15000, db: db); // تبدّل الأولى
+
+    final music = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'music')
+        .toList();
+    expect(music.length, 1); // وحدة برك
+    expect(music.first.sourcePath, '/m2.mp3');
+    expect(music.first.startMs, 0);
+    expect(ProjectRepo.volumeOf(music.first), ProjectRepo.defaultMusicVolume);
+  });
+
+  test('buildExportPlan: يمرّر audio (voice كامل + music منخفّض)', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 8000, db: db);
+    await ProjectRepo.addVoiceClip(
+        projectId: pid, sourcePath: '/v.m4a', durationMs: 4000, db: db);
+    await ProjectRepo.setMusic(
+        projectId: pid, sourcePath: '/m.mp3', durationMs: 8000, volume: 0.2, db: db);
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    expect(plan.audio.length, 2);
+    final v = plan.audio.firstWhere((a) => a['kind'] == 'voice');
+    expect(v['path'], '/v.m4a');
+    expect(v['volume'], 1.0);
+    final m = plan.audio.firstWhere((a) => a['kind'] == 'music');
+    expect(m['volume'], 0.2);
+  });
 }

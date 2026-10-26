@@ -13,6 +13,8 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.audio.ChannelMixingAudioProcessor
+import androidx.media3.common.audio.ChannelMixingMatrix
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
@@ -49,6 +51,7 @@ class MainActivity : FlutterActivity() {
                     "exportComposition" -> exportComposition(
                         call.argument("clips")!!,
                         call.argument("overlays") ?: emptyList(),
+                        call.argument("audio") ?: emptyList(),
                         call.argument("output")!!,
                         call.argument("width") ?: 1080,
                         call.argument("height") ?: 1920,
@@ -113,11 +116,47 @@ class MainActivity : FlutterActivity() {
         return s
     }
 
+    /// يبني سلسلة صوت (voix off / موسيقى): كل clip فبلاصتو عبر gaps (سكوت)،
+    /// بلا فيديو، مع تحجيم الصوت (volume) عبر ChannelMixingAudioProcessor.
+    @OptIn(UnstableApi::class)
+    private fun audioSequence(items: List<Map<String, Any>>): EditedMediaItemSequence? {
+        if (items.isEmpty()) return null
+        val sorted = items.sortedBy { (it["startMs"] as Number).toLong() }
+        val b = EditedMediaItemSequence.Builder().experimentalSetForceAudioTrack(true)
+        var cursor = 0L
+        for (a in sorted) {
+            val start = (a["startMs"] as Number).toLong()
+            if (start > cursor) { b.addGap((start - cursor) * 1000); cursor = start }
+            val inMs = (a["inMs"] as Number).toLong()
+            val outMs = (a["outMs"] as Number).toLong()
+            val mi = MediaItem.Builder()
+                .setUri(a["path"] as String)
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(inMs)
+                        .setEndPositionMs(outMs)
+                        .build())
+                .build()
+            val vol = (a["volume"] as? Number)?.toFloat() ?: 1f
+            val eb = EditedMediaItem.Builder(mi).setRemoveVideo(true)
+            if (vol != 1f) {
+                val proc = ChannelMixingAudioProcessor()
+                proc.putChannelMixingMatrix(ChannelMixingMatrix.create(1, 1).scaleBy(vol))
+                proc.putChannelMixingMatrix(ChannelMixingMatrix.create(2, 2).scaleBy(vol))
+                eb.setEffects(Effects(listOf(proc), emptyList()))
+            }
+            b.addItem(eb.build())
+            cursor += (outMs - inMs)
+        }
+        return b.build()
+    }
+
     @Suppress("UNCHECKED_CAST")
     @OptIn(UnstableApi::class)
     private fun exportComposition(
         clips: List<Map<String, Any>>,
         overlays: List<Map<String, Any>>,
+        audio: List<Map<String, Any>>,
         output: String,
         width: Int, height: Int,
         result: MethodChannel.Result,
@@ -178,7 +217,13 @@ class MainActivity : FlutterActivity() {
                     .build())
             }
 
-            val composition = Composition.Builder(seqBuilder.build()).build()
+            // سلاسل الصوت (voix off + موسيقى) تتمزج فوق الفيديو
+            val sequences = ArrayList<EditedMediaItemSequence>()
+            sequences.add(seqBuilder.build())
+            audioSequence(audio.filter { (it["kind"] as? String) == "voice" })?.let { sequences.add(it) }
+            audioSequence(audio.filter { (it["kind"] as? String) == "music" })?.let { sequences.add(it) }
+
+            val composition = Composition.Builder(sequences).build()
             val started = SystemClock.elapsedRealtime()
             var replied = false
             val transformer = Transformer.Builder(this)
