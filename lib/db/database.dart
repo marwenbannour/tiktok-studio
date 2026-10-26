@@ -30,7 +30,35 @@ class Scripts extends Table {
   IntColumn get episode => integer().nullable()();
 }
 
-@DriftDatabase(tables: [Scripts])
+/// مشروع فيديو (Lot 2) — projet 9:16 مربوط بسكريبت (ولا فارغ)
+class Projects extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get scriptId => integer().nullable()();
+  TextColumn get title => text()();
+  IntColumn get width => integer().withDefault(const Constant(1080))();
+  IntColumn get height => integer().withDefault(const Constant(1920))();
+  IntColumn get fps => integer().withDefault(const Constant(30))();
+  IntColumn get durationMs => integer().withDefault(const Constant(0))();
+  TextColumn get exportedPath => text().nullable()();
+  IntColumn get updatedAt => integer()();
+}
+
+/// clip على الـtimeline: فيديو/overlay/نص/sous-titre/voix/musique
+class Clips extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get projectId =>
+      integer().references(Projects, #id, onDelete: KeyAction.cascade)();
+  TextColumn get track => text()(); // video, overlay, text, subtitle, voice, music
+  TextColumn get sourcePath => text().nullable()(); // null للنصّ
+  IntColumn get startMs => integer()(); // الموضع على الـtimeline
+  IntColumn get inMs => integer().withDefault(const Constant(0))();
+  IntColumn get outMs => integer().withDefault(const Constant(0))();
+  RealColumn get speed => real().withDefault(const Constant(1.0))();
+  IntColumn get zOrder => integer().withDefault(const Constant(0))();
+  TextColumn get props => text().withDefault(const Constant('{}'))(); // JSON: text, style, animation...
+}
+
+@DriftDatabase(tables: [Scripts, Projects, Clips])
 class AppDatabase extends _$AppDatabase {
   AppDatabase._(super.e);
 
@@ -43,10 +71,13 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
+        },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.addColumn(scripts, scripts.views);
@@ -56,6 +87,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.addColumn(scripts, scripts.seriesTitle);
             await m.addColumn(scripts, scripts.episode);
+          }
+          if (from < 4) {
+            await m.createTable(projects);
+            await m.createTable(clips);
           }
         },
       );
@@ -197,5 +232,48 @@ class AppDatabase extends _$AppDatabase {
     final c = scripts.id.count();
     final row = await (selectOnly(scripts)..addColumns([c])).getSingle();
     return row.read(c) ?? 0;
+  }
+
+  // ---- مشاريع الفيديو والـclips (Lot 2) ----
+  Future<int> createProject(ProjectsCompanion c) => into(projects).insert(c);
+
+  Future<List<Project>> allProjects() =>
+      (select(projects)..orderBy([(p) => OrderingTerm.desc(p.updatedAt)])).get();
+
+  Future<Project?> projectById(int id) =>
+      (select(projects)..where((p) => p.id.equals(id))).getSingleOrNull();
+
+  Future<void> removeProject(int id) async {
+    // صريح (ما نعتمدوش على PRAGMA foreign_keys)
+    await (delete(clips)..where((c) => c.projectId.equals(id))).go();
+    await (delete(projects)..where((p) => p.id.equals(id))).go();
+  }
+
+  Future<void> touchProject(int id, {int? durationMs, String? exportedPath}) =>
+      (update(projects)..where((p) => p.id.equals(id))).write(ProjectsCompanion(
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        durationMs: durationMs == null ? const Value.absent() : Value(durationMs),
+        exportedPath:
+            exportedPath == null ? const Value.absent() : Value(exportedPath),
+      ));
+
+  Future<int> addClip(ClipsCompanion c) => into(clips).insert(c);
+
+  Future<List<Clip>> projectClips(int projectId) => (select(clips)
+        ..where((c) => c.projectId.equals(projectId))
+        ..orderBy([(c) => OrderingTerm.asc(c.startMs), (c) => OrderingTerm.asc(c.zOrder)]))
+      .get();
+
+  Future<void> updateClip(int id, ClipsCompanion c) =>
+      (update(clips)..where((cl) => cl.id.equals(id))).write(c);
+
+  Future<void> removeClip(int id) => (delete(clips)..where((c) => c.id.equals(id))).go();
+
+  /// يعاود يحطّ كل الـclips متاع مشروع (للـassemblage auto)
+  Future<void> replaceClips(int projectId, List<ClipsCompanion> newClips) async {
+    await batch((b) {
+      b.deleteWhere(clips, (c) => c.projectId.equals(projectId));
+      b.insertAll(clips, newClips);
+    });
   }
 }
