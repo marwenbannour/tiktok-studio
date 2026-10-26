@@ -54,3 +54,6 @@ app.*.map.json
 
 # فيديوات تسجيل التست (artifacts)
 *.mp4
+
+# استثناء: عيّنة فيديو لتست محرّك الفيديو (fixture)
+!assets/sample.mp4
