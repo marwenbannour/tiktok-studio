@@ -42,4 +42,39 @@ void main() {
     expect(String.fromCharCodes(head.sublist(4, 8)), 'ftyp');
     expect(r.ms, greaterThan(0));
   });
+
+  testWidgets('Media3 exportComposition: دمج clipين + نصوص موقّتة', (tester) async {
+    final dir = await getTemporaryDirectory();
+    final bytes = await rootBundle.load('assets/sample.mp4');
+    final src = File('${dir.path}/sample_c.mp4');
+    await src.writeAsBytes(bytes.buffer.asUint8List());
+
+    // نكتشفو مدّة الـsample باش نبنيو clipين ضمنها
+    // (sample قصير؛ ناخذو نصفين منّو)
+    const half = 500; // ~0.5s لكل clip (آمن حتى لو sample قصير)
+    final output = '${dir.path}/comp_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+    final r = await VideoEngine.exportComposition(
+      clips: [
+        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': 0},
+        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half},
+      ],
+      overlays: [
+        // ترجمة تغطّي الـclip الأوّل، نصّ يعبر الحدّ بين الزوز clips
+        {'text': 'ترجمة ١', 'startMs': 0, 'endMs': half, 'kind': 'subtitle'},
+        {'text': 'نصّ يعبر', 'startMs': 200, 'endMs': half + 200, 'kind': 'text'},
+      ],
+      output: output,
+      width: 1080,
+      height: 1920,
+    );
+
+    debugPrint('COMPOSITION_RESULT ms=${r.ms} output=${r.output}');
+    final out = File(output);
+    expect(await out.exists(), isTrue, reason: 'ملف الـcomposition ما اتعملش');
+    expect(await out.length(), greaterThan(1000));
+    final head = await out.openRead(0, 12).first;
+    expect(String.fromCharCodes(head.sublist(4, 8)), 'ftyp');
+    expect(r.ms, greaterThan(0));
+  });
 }

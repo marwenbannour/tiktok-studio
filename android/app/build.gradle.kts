@@ -82,7 +82,9 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     // محرّك export الفيديو (Lot 2): Media3 Transformer + Effect (نصّ على الفيديو)
-    val media3 = "1.5.1"
+    // 1.9.2 = نفس نسخة الـruntime اللي يجرّها video_player (مجموعة media3 تتوحّد
+    // للأعلى)؛ لو خلّيناها 1.5.1 الكومپايل يختلف عن الـruntime → NoClassDefFound.
+    val media3 = "1.9.2"
     implementation("androidx.media3:media3-transformer:$media3")
     implementation("androidx.media3:media3-effect:$media3")
     implementation("androidx.media3:media3-common:$media3")

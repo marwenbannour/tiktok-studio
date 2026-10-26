@@ -6,8 +6,8 @@ import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
-import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
@@ -55,8 +55,10 @@ class MainActivity : FlutterActivity() {
         private val events: List<Triple<String, Long, Long>>, // text, startUs, endUs
         private val anchorY: Float, // -1 تحت .. +1 فوق
     ) : TextOverlay() {
-        private val settings: OverlaySettings =
-            OverlaySettings.Builder().setBackgroundFrameAnchor(0f, anchorY).build()
+        // covariant return: الأب يرجّع OverlaySettings (interface)، StaticOverlaySettings
+        // نوعو الفرعي — نتفادو تسمية الـinterface لأنّها مش منحلّة فهالنسخة.
+        private val settings: StaticOverlaySettings =
+            StaticOverlaySettings.Builder().setBackgroundFrameAnchor(0f, anchorY).build()
 
         override fun getText(presentationTimeUs: Long): SpannableString {
             for (e in events) {
@@ -67,7 +69,7 @@ class MainActivity : FlutterActivity() {
             return SpannableString(" ") // فارغ = ما يبان شيء
         }
 
-        override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
+        override fun getOverlaySettings(presentationTimeUs: Long): StaticOverlaySettings = settings
     }
 
     @Suppress("UNCHECKED_CAST")
