@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'screens/history_screen.dart';
 import 'screens/plans_screen.dart';
+import 'screens/projects_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/studio_screen.dart';
@@ -46,6 +47,7 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   int _historyKey = 0;
   int _plansKey = 0;
+  int _projectsKey = 0;
   int _settingsKey = 0;
 
   @override
@@ -57,6 +59,7 @@ class _HomeShellState extends State<HomeShell> {
           const StudioScreen(),
           HistoryScreen(key: ValueKey(_historyKey)),
           PlansScreen(key: ValueKey(_plansKey)),
+          ProjectsScreen(key: ValueKey(_projectsKey)),
           SettingsScreen(key: ValueKey(_settingsKey)),
         ],
       ),
@@ -67,12 +70,14 @@ class _HomeShellState extends State<HomeShell> {
           // نعاودو نقراو (ينجمو يتبدّلو من شاشة النتيجة/التوليد)
           if (i == 1) _historyKey++;
           if (i == 2) _plansKey++;
-          if (i == 3) _settingsKey++;
+          if (i == 3) _projectsKey++;
+          if (i == 4) _settingsKey++;
         }),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.movie_creation_outlined), label: 'حضّر'),
           NavigationDestination(icon: Icon(Icons.bookmarks_outlined), label: 'المحفوظات'),
           NavigationDestination(icon: Icon(Icons.event_note_outlined), label: 'البرنامج'),
+          NavigationDestination(icon: Icon(Icons.video_library_outlined), label: 'المشاريع'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'الإعدادات'),
         ],
       ),

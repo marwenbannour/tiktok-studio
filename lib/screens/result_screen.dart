@@ -9,8 +9,10 @@ import '../theme.dart';
 import 'plan_editor.dart';
 import 'segment_editor.dart';
 import 'stats_editor.dart';
+import '../editor/project_repo.dart';
 import 'capcut_screen.dart';
 import 'teleprompter_screen.dart';
+import 'video_editor_screen.dart';
 
 class ResultScreen extends StatefulWidget {
   final VideoScript script;
@@ -63,8 +65,22 @@ class _ResultScreenState extends State<ResultScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => CapCutScreen(script: script)),
         );
+      case 'build_video':
+        _buildVideo();
       default:
         _share(what);
+    }
+  }
+
+  Future<void> _buildVideo() async {
+    try {
+      final pid = await ProjectRepo.createFromScript(script);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => VideoEditorScreen(projectId: pid)),
+      );
+    } catch (e) {
+      _snack('ما نجّمناش نعملو المشروع. عاود جرّب.');
     }
   }
 
@@ -140,6 +156,7 @@ class _ResultScreenState extends State<ResultScreen> {
             tooltip: 'المزيد',
             onSelected: _onMenu,
             itemBuilder: (_) => [
+              const PopupMenuItem(value: 'build_video', child: Text('🎞️ ركّب الفيديو')),
               const PopupMenuItem(value: 'capcut', child: Text('🎬 إلى CapCut (مونتاج)')),
               const PopupMenuItem(value: 'script', child: Text('📝 شارك السكريبت كامل')),
               const PopupMenuItem(value: 'caption', child: Text('📲 شارك الـcaption')),
