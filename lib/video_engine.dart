@@ -26,4 +26,29 @@ class VideoEngine {
       output: (r?['output'] as String?) ?? output,
     );
   }
+
+  /// V21: export مشروع كامل — يدمج [clips] (فيديوهات) ويحرق [overlays]
+  /// (نصوص/ترجمة موقّتة) على الـtimeline العامّ.
+  ///
+  /// clips: {path, inMs, outMs, startMs}  ·  overlays: {text, startMs, endMs, kind}
+  /// (kind: 'subtitle' تحت / 'text' فوق).
+  static Future<({int ms, String output})> exportComposition({
+    required List<Map<String, Object>> clips,
+    required List<Map<String, Object>> overlays,
+    required String output,
+    int width = 1080,
+    int height = 1920,
+  }) async {
+    final r = await _ch.invokeMapMethod<String, dynamic>('exportComposition', {
+      'clips': clips,
+      'overlays': overlays,
+      'output': output,
+      'width': width,
+      'height': height,
+    });
+    return (
+      ms: (r?['ms'] as num?)?.toInt() ?? 0,
+      output: (r?['output'] as String?) ?? output,
+    );
+  }
 }

@@ -3,12 +3,15 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import '../db/database.dart';
 import '../editor/project_repo.dart';
 import '../theme.dart';
+import '../video_engine.dart';
 
 /// محرّر الفيديو (Lot 2): معاينة (video_player) + timeline متعدّد المسارات.
 /// V02 استيراد rushes + V07 معاينة. التحرير الكامل (trim/split/export) جاي.
@@ -99,6 +102,41 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       if (mounted) _snack('تزاد الفيديو للـtimeline ✅');
     } catch (e) {
       if (mounted) _snack('ما نجّمناش نستوردو الفيديو.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// V21: export المشروع لـMP4 (دمج الفيديوهات + حرق النصوص الموقّتة) → galerie.
+  Future<void> _export() async {
+    final plan = await ProjectRepo.buildExportPlan(widget.projectId);
+    if (plan.clips.isEmpty) {
+      _snack('زيد فيديو واحد على الأقلّ قبل الـexport (➕ فوق).');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final base = await getApplicationDocumentsDirectory();
+      final out =
+          '${base.path}/projects/${widget.projectId}/export_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final p = _project!;
+      final r = await VideoEngine.exportComposition(
+        clips: plan.clips,
+        overlays: plan.overlays,
+        output: out,
+        width: p.width,
+        height: p.height,
+      );
+      if (!await Gal.hasAccess(toAlbum: true)) {
+        await Gal.requestAccess(toAlbum: true);
+      }
+      await Gal.putVideo(r.output, album: 'TikTok Studio');
+      await ProjectRepo.markExported(widget.projectId, r.output);
+      if (mounted) {
+        _snack('تصدّر فالـgalerie ✅ (${(r.ms / 1000).toStringAsFixed(1)}s)');
+      }
+    } catch (e) {
+      if (mounted) _snack('فشل الـexport: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -336,9 +374,15 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton.icon(
-                  onPressed: () => _snack('الـexport الكامل بالنصوص يجي قريباً 🎬'),
-                  icon: const Icon(Icons.movie_filter_outlined),
-                  label: const Text('صدّر MP4'),
+                  onPressed: _busy ? null : _export,
+                  icon: _busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.movie_filter_outlined),
+                  label: Text(_busy ? 'يصدّر…' : 'صدّر MP4'),
                 ),
               ),
             ),

@@ -193,6 +193,44 @@ class ProjectRepo {
     await d.touchProject(projectId, durationMs: maxEnd);
   }
 
+  /// V21: يبني payload الـexport من clips المشروع — نقي وقابل للاختبار.
+  /// clips (فيديو مرتّبين) + overlays (نصّ/ترجمة موقّتين على الـtimeline العامّ).
+  static Future<({List<Map<String, Object>> clips, List<Map<String, Object>> overlays})>
+      buildExportPlan(int projectId, {AppDatabase? db}) async {
+    final all = await _resolve(db).projectClips(projectId);
+
+    final clips = <Map<String, Object>>[];
+    for (final c in all.where((c) => c.track == 'video' && c.sourcePath != null).toList()
+      ..sort((a, b) => a.startMs.compareTo(b.startMs))) {
+      clips.add({
+        'path': c.sourcePath!,
+        'inMs': c.inMs,
+        'outMs': c.outMs > 0 ? c.outMs : c.inMs,
+        'startMs': c.startMs,
+      });
+    }
+
+    final overlays = <Map<String, Object>>[];
+    for (final c in all.where((c) => c.track == 'text' || c.track == 'subtitle')) {
+      String txt = '';
+      try {
+        txt = (jsonDecode(c.props)['text'] as String?)?.trim() ?? '';
+      } catch (_) {}
+      if (txt.isEmpty) continue;
+      overlays.add({
+        'text': txt,
+        'startMs': c.startMs,
+        'endMs': c.startMs + clipDuration(c),
+        'kind': c.track, // 'text' فوق / 'subtitle' تحت
+      });
+    }
+    return (clips: clips, overlays: overlays);
+  }
+
+  /// يسجّل مسار آخر export فالمشروع.
+  static Future<void> markExported(int projectId, String path, {AppDatabase? db}) =>
+      _resolve(db).touchProject(projectId, exportedPath: path);
+
   static Future<List<Project>> all({AppDatabase? db}) => _resolve(db).allProjects();
   static Future<Project?> byId(int id, {AppDatabase? db}) => _resolve(db).projectById(id);
   static Future<List<Clip>> clips(int id, {AppDatabase? db}) =>

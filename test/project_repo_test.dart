@@ -191,4 +191,38 @@ void main() {
     expect(vids[1].startMs, 5000); // b: 5000..9000
     expect(vids[2].startMs, 9000); // a: 9000..12000
   });
+
+  test('buildExportPlan: clips مرتّبين + overlays موقّتين (نصّ/ترجمة)', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    // سكريبت = 2 segments → 2 subtitle + 1 text. نزيدو فيديو.
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 8000, db: db);
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+
+    // clip فيديو واحد
+    expect(plan.clips.length, 1);
+    expect(plan.clips.first['path'], '/a.mp4');
+    expect(plan.clips.first['inMs'], 0);
+    expect(plan.clips.first['outMs'], 8000);
+    expect(plan.clips.first['startMs'], 0);
+
+    // overlays: 2 subtitle + 1 text = 3، كلّهم بتوقيت
+    expect(plan.overlays.length, 3);
+    final sub1 = plan.overlays.firstWhere(
+        (o) => o['kind'] == 'subtitle' && o['startMs'] == 0);
+    expect(sub1['text'], 'كتبت function');
+    expect(sub1['endMs'], 5000); // 0..5000
+    final text1 = plan.overlays.firstWhere((o) => o['kind'] == 'text');
+    expect(text1['text'], 'شدّ بالك');
+    expect(text1['startMs'], 0);
+    expect(text1['endMs'], 5000);
+  });
+
+  test('buildExportPlan: بلا فيديو → clips فارغة', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    expect(plan.clips, isEmpty); // ماكانش rushes → UI يمنع الـexport
+    expect(plan.overlays.isNotEmpty, isTrue);
+  });
 }
