@@ -225,4 +225,52 @@ void main() {
     expect(plan.clips, isEmpty); // ماكانش rushes → UI يمنع الـexport
     expect(plan.overlays.isNotEmpty, isTrue);
   });
+
+  test('styleOf: قيم افتراضية حسب النوع (نصّ أصفر كبير / ترجمة بيضاء)', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    final clips = await ProjectRepo.clips(pid, db: db);
+    final text = clips.firstWhere((c) => c.track == 'text');
+    final sub = clips.firstWhere((c) => c.track == 'subtitle');
+
+    final ts = ProjectRepo.styleOf(text);
+    expect(ts['color'], '#FFEB3B'); // أصفر
+    expect(ts['size'], 64);
+    expect(ts['bold'], true);
+    expect(ts['align'], 'center');
+
+    final ss = ProjectRepo.styleOf(sub);
+    expect(ss['color'], '#FFFFFF'); // أبيض
+    expect(ss['size'], 48);
+  });
+
+  test('updateStyle → styleOf + buildExportPlan يعكسو التنسيق الجديد', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 8000, db: db);
+    final sub = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.track == 'subtitle' && c.startMs == 0);
+
+    await ProjectRepo.updateStyle(sub.id, {
+      'text': 'ترجمة محرّرة',
+      'color': '#00E5FF',
+      'size': 72,
+      'bold': false,
+      'align': 'right',
+    }, db: db);
+
+    final reloaded = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == sub.id);
+    final st = ProjectRepo.styleOf(reloaded);
+    expect(st['text'], 'ترجمة محرّرة');
+    expect(st['color'], '#00E5FF');
+    expect(st['size'], 72);
+    expect(st['bold'], false);
+    expect(st['align'], 'right');
+
+    // يبان فالـexport plan
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    final ov = plan.overlays.firstWhere((o) => o['text'] == 'ترجمة محرّرة');
+    expect(ov['color'], '#00E5FF');
+    expect(ov['size'], 72);
+    expect(ov['align'], 'right');
+  });
 }

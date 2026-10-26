@@ -212,19 +212,51 @@ class ProjectRepo {
 
     final overlays = <Map<String, Object>>[];
     for (final c in all.where((c) => c.track == 'text' || c.track == 'subtitle')) {
-      String txt = '';
-      try {
-        txt = (jsonDecode(c.props)['text'] as String?)?.trim() ?? '';
-      } catch (_) {}
+      final style = styleOf(c);
+      final txt = (style['text'] as String).trim();
       if (txt.isEmpty) continue;
       overlays.add({
         'text': txt,
         'startMs': c.startMs,
         'endMs': c.startMs + clipDuration(c),
         'kind': c.track, // 'text' فوق / 'subtitle' تحت
+        'color': style['color'] as Object,
+        'size': style['size'] as Object,
+        'bold': style['bold'] as Object,
+        'align': style['align'] as Object,
+        if (style['bg'] != null) 'bg': style['bg'] as Object,
       });
     }
     return (clips: clips, overlays: overlays);
+  }
+
+  /// V08: تنسيق النصّ لـclip (نصّ/ترجمة) مع قيم افتراضية حسب النوع.
+  /// props JSON: {text, color(#RRGGBB), size(px), bold, align(center/right/left), bg}
+  static Map<String, Object?> styleOf(Clip c) {
+    Map<String, dynamic> p = {};
+    try {
+      p = jsonDecode(c.props) as Map<String, dynamic>;
+    } catch (_) {}
+    final isText = c.track == 'text';
+    return {
+      'text': (p['text'] as String?) ?? '',
+      'color': (p['color'] as String?) ?? (isText ? '#FFEB3B' : '#FFFFFF'),
+      'size': (p['size'] as num?)?.toInt() ?? (isText ? 64 : 48),
+      'bold': (p['bold'] as bool?) ?? true,
+      'align': (p['align'] as String?) ?? 'center',
+      'bg': p['bg'] as String?, // null = بلا خلفية
+    };
+  }
+
+  /// يحدّث تنسيق/نصّ clip (يكتب props JSON).
+  static Future<void> updateStyle(int clipId, Map<String, Object?> style,
+      {AppDatabase? db}) async {
+    final clean = <String, Object?>{};
+    style.forEach((k, v) {
+      if (v != null) clean[k] = v;
+    });
+    await _resolve(db)
+        .updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(clean))));
   }
 
   /// يسجّل مسار آخر export فالمشروع.

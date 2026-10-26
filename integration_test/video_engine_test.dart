@@ -60,9 +60,13 @@ void main() {
         {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half},
       ],
       overlays: [
-        // ترجمة تغطّي الـclip الأوّل، نصّ يعبر الحدّ بين الزوز clips
-        {'text': 'ترجمة ١', 'startMs': 0, 'endMs': half, 'kind': 'subtitle'},
-        {'text': 'نصّ يعبر', 'startMs': 200, 'endMs': half + 200, 'kind': 'text'},
+        // ترجمة منسّقة (سماوي/حجم/محاذاة) تغطّي الـclip الأوّل
+        {'text': 'ترجمة ١', 'startMs': 0, 'endMs': half, 'kind': 'subtitle',
+         'color': '#00E5FF', 'size': 52, 'bold': true, 'align': 'center',
+         'bg': '#99000000'},
+        // نصّ أصفر يعبر الحدّ بين الزوز clips
+        {'text': 'نصّ يعبر', 'startMs': 200, 'endMs': half + 200, 'kind': 'text',
+         'color': '#FFEB3B', 'size': 64, 'bold': true, 'align': 'right'},
       ],
       output: output,
       width: 1080,

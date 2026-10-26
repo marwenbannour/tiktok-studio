@@ -142,6 +142,151 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
     }
   }
 
+  /// V08: محرّر تنسيق النصّ/الترجمة — نصّ، لون، حجم، محاذاة، bold.
+  Future<void> _editTextClip(Clip clip) async {
+    const swatches = [
+      '#FFFFFF', '#000000', '#FFEB3B', '#FF2D55', '#00E5FF', '#4CAF50', '#FF9800'
+    ];
+    final style = ProjectRepo.styleOf(clip);
+    final ctrl = TextEditingController(text: style['text'] as String);
+    var color = style['color'] as String;
+    var size = (style['size'] as int).toDouble();
+    var align = style['align'] as String;
+    var bold = style['bold'] as bool;
+    final isText = clip.track == 'text';
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+            left: 20, right: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: StatefulBuilder(
+          builder: (ctx, setSheet) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isText ? '📝 نصّ على الشاشة' : '💬 ترجمة',
+                  style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              // معاينة حيّة
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: Colors.black, borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  ctrl.text.isEmpty ? '…' : ctrl.text,
+                  textAlign: align == 'right'
+                      ? TextAlign.right
+                      : align == 'left'
+                          ? TextAlign.left
+                          : TextAlign.center,
+                  style: TextStyle(
+                    color: _hex(color),
+                    fontSize: size / 3, // تقريب للمعاينة
+                    fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'النصّ'),
+                onChanged: (_) => setSheet(() {}),
+              ),
+              const SizedBox(height: 14),
+              const Text('اللون', style: TextStyle(color: AppColors.textMid)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final s in swatches)
+                    GestureDetector(
+                      onTap: () => setSheet(() => color = s),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: _hex(s),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: color == s ? AppColors.cyan : AppColors.border,
+                              width: color == s ? 3 : 1),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Text('الحجم', style: TextStyle(color: AppColors.textMid)),
+                  Expanded(
+                    child: Slider(
+                      value: size.clamp(24, 120),
+                      min: 24,
+                      max: 120,
+                      onChanged: (v) => setSheet(() => size = v),
+                    ),
+                  ),
+                  Text('${size.round()}'),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // محاذاة
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'right', icon: Icon(Icons.format_align_right)),
+                      ButtonSegment(value: 'center', icon: Icon(Icons.format_align_center)),
+                      ButtonSegment(value: 'left', icon: Icon(Icons.format_align_left)),
+                    ],
+                    selected: {align},
+                    onSelectionChanged: (s) => setSheet(() => align = s.first),
+                  ),
+                  Row(children: [
+                    const Text('B', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Switch(value: bold, onChanged: (v) => setSheet(() => bold = v)),
+                  ]),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('حفظ')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (saved == true) {
+      await ProjectRepo.updateStyle(clip.id, {
+        'text': ctrl.text,
+        'color': color,
+        'size': size.round(),
+        'bold': bold,
+        'align': align,
+        if (style['bg'] != null) 'bg': style['bg'],
+      });
+      await _load();
+    }
+    ctrl.dispose();
+  }
+
+  Color _hex(String h) {
+    final v = h.replaceFirst('#', '');
+    final s = v.length == 6 ? 'FF$v' : v;
+    return Color(int.parse(s, radix: 16));
+  }
+
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
@@ -465,7 +610,11 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                         top: 0,
                         bottom: 0,
                         child: GestureDetector(
-                          onTap: track == 'video' ? () => _editVideoClip(clip) : null,
+                          onTap: track == 'video'
+                              ? () => _editVideoClip(clip)
+                              : (track == 'text' || track == 'subtitle')
+                                  ? () => _editTextClip(clip)
+                                  : null,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 1),
                             padding: const EdgeInsets.symmetric(horizontal: 6),

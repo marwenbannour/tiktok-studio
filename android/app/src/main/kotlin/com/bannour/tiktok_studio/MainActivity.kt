@@ -1,7 +1,16 @@
 package com.bannour.tiktok_studio
 
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.SystemClock
+import android.text.Layout
 import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.AlignmentSpan
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -49,12 +58,16 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    /// نصّ موقّت: يبان برك خلال النوافذ [events] (بالـµs نسبةً للـclip).
+    /// حدث نصّ موقّت مع التنسيق الجاهز (span).
+    private class TextEvent(val span: SpannableString, val startUs: Long, val endUs: Long)
+
+    /// نصّ موقّت: يبان برك خلال نافذتو، مع التنسيق (لون/حجم/bold/محاذاة/خلفية).
     @OptIn(UnstableApi::class)
     private class TimedTextOverlay(
-        private val events: List<Triple<String, Long, Long>>, // text, startUs, endUs
+        private val events: List<TextEvent>,
         private val anchorY: Float, // -1 تحت .. +1 فوق
     ) : TextOverlay() {
+        private val empty = SpannableString(" ")
         // covariant return: الأب يرجّع OverlaySettings (interface)، StaticOverlaySettings
         // نوعو الفرعي — نتفادو تسمية الـinterface لأنّها مش منحلّة فهالنسخة.
         private val settings: StaticOverlaySettings =
@@ -62,14 +75,42 @@ class MainActivity : FlutterActivity() {
 
         override fun getText(presentationTimeUs: Long): SpannableString {
             for (e in events) {
-                if (presentationTimeUs >= e.second && presentationTimeUs < e.third) {
-                    return SpannableString(e.first)
-                }
+                if (presentationTimeUs >= e.startUs && presentationTimeUs < e.endUs) return e.span
             }
-            return SpannableString(" ") // فارغ = ما يبان شيء
+            return empty // فارغ = ما يبان شيء
         }
 
         override fun getOverlaySettings(presentationTimeUs: Long): StaticOverlaySettings = settings
+    }
+
+    /// يبني SpannableString منسّق من خريطة overlay (مع قيم افتراضية آمنة).
+    private fun styledSpan(ov: Map<String, Any>, defaultColor: Int, defaultSize: Int): SpannableString {
+        val txt = (ov["text"] as? String) ?: ""
+        val s = SpannableString(txt)
+        val n = txt.length
+        if (n == 0) return s
+        fun parse(c: Any?, fallback: Int): Int =
+            try { if (c is String && c.isNotBlank()) Color.parseColor(c) else fallback }
+            catch (_: Exception) { fallback }
+
+        val color = parse(ov["color"], defaultColor)
+        val size = (ov["size"] as? Number)?.toInt() ?: defaultSize
+        val bold = (ov["bold"] as? Boolean) ?: true
+        val align = (ov["align"] as? String) ?: "center"
+        s.setSpan(ForegroundColorSpan(color), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        s.setSpan(AbsoluteSizeSpan(size, false), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE) // px
+        if (bold) s.setSpan(StyleSpan(Typeface.BOLD), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        (ov["bg"] as? String)?.let { bg ->
+            if (bg.isNotBlank()) s.setSpan(BackgroundColorSpan(parse(bg, Color.TRANSPARENT)), 0, n,
+                Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        }
+        val a = when (align) {
+            "right" -> Layout.Alignment.ALIGN_OPPOSITE
+            "left" -> Layout.Alignment.ALIGN_NORMAL
+            else -> Layout.Alignment.ALIGN_CENTER
+        }
+        s.setSpan(AlignmentSpan.Standard(a), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        return s
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -107,8 +148,8 @@ class MainActivity : FlutterActivity() {
                     width, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP))
 
                 // نحوّلو النصوص للتوقيت النسبي متاع هذا الـclip (تقاطع مع نافذتو)
-                val subs = ArrayList<Triple<String, Long, Long>>()
-                val texts = ArrayList<Triple<String, Long, Long>>()
+                val subs = ArrayList<TextEvent>()
+                val texts = ArrayList<TextEvent>()
                 for (ov in overlays) {
                     val s = (ov["startMs"] as Number).toLong()
                     val e = (ov["endMs"] as Number).toLong()
@@ -117,8 +158,13 @@ class MainActivity : FlutterActivity() {
                     val relEndUs = (minOf(e, gEnd) - gStart) * 1000
                     val txt = (ov["text"] as? String) ?: ""
                     if (txt.isBlank()) continue
-                    val triple = Triple(txt, relStartUs, relEndUs)
-                    if ((ov["kind"] as? String) == "text") texts.add(triple) else subs.add(triple)
+                    val isText = (ov["kind"] as? String) == "text"
+                    // نصّ incrusté: أصفر كبير فوق؛ ترجمة: أبيض أصغر تحت
+                    val span = styledSpan(ov,
+                        if (isText) Color.parseColor("#FFEB3B") else Color.WHITE,
+                        if (isText) 64 else 48)
+                    val ev = TextEvent(span, relStartUs, relEndUs)
+                    if (isText) texts.add(ev) else subs.add(ev)
                 }
                 val overlayList = ArrayList<TextureOverlay>()
                 if (subs.isNotEmpty()) overlayList.add(TimedTextOverlay(subs, -0.8f))
