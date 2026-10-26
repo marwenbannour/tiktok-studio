@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../db/database.dart';
 import '../models.dart';
@@ -57,6 +59,42 @@ class ProjectRepo {
       }
     }
     await d.replaceClips(projectId, out);
+  }
+
+  /// V02: يزيد clip فيديو في آخر مسار الفيديو، ويحدّث مدّة المشروع.
+  /// (منطق DB نقي — قابل للاختبار؛ نسخ الملف في [importMedia] منفصل.)
+  static Future<void> addVideoClip({
+    required int projectId,
+    required String sourcePath,
+    required int durationMs,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final videos = (await d.projectClips(projectId)).where((c) => c.track == 'video');
+    final startMs = videos.fold<int>(0, (acc, c) => acc + (c.outMs > 0 ? c.outMs : 0));
+    await d.addClip(ClipsCompanion.insert(
+      projectId: projectId,
+      track: 'video',
+      sourcePath: Value(sourcePath),
+      startMs: startMs,
+      outMs: Value(durationMs),
+    ));
+    final p = await d.projectById(projectId);
+    final newDur = (startMs + durationMs) > (p?.durationMs ?? 0)
+        ? (startMs + durationMs)
+        : (p?.durationMs ?? 0);
+    await d.touchProject(projectId, durationMs: newDur);
+  }
+
+  /// ينسخ ملف media لمجلّد خاصّ بالمشروع، ويرجّع المسار الجديد. (I/O)
+  static Future<String> importMedia(int projectId, String sourcePath) async {
+    final base = await getApplicationDocumentsDirectory();
+    final dir = Directory('${base.path}/projects/$projectId');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final name = '${DateTime.now().millisecondsSinceEpoch}_${sourcePath.split('/').last}';
+    final dest = File('${dir.path}/$name');
+    await File(sourcePath).copy(dest.path);
+    return dest.path;
   }
 
   static Future<List<Project>> all({AppDatabase? db}) => _resolve(db).allProjects();

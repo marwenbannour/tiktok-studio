@@ -146,6 +146,13 @@ void main() {
       await tester.pageBack(); // نرجعو للنتيجة
       await tester.pumpAndSettle();
 
+      // 10) محرّر الفيديو (ركّب الفيديو → timeline من assemblage auto)
+      await tapVisible(tester, find.byTooltip('المزيد'));
+      await tapVisible(tester, find.text('🎞️ ركّب الفيديو'));
+      await snap(tester, '10_editor');
+      await tester.pageBack(); // نرجعو للنتيجة
+      await tester.pumpAndSettle();
+
       // 6) تسجيل بالكاميرا (Teleprompter → 🎥) — الأذونات تتعطا بالتوازي عبر adb
       await tapVisible(tester, find.text('Teleprompter')); // FAB فـ ResultScreen
       final camBtn = find.byTooltip('سجّل بالكاميرا');

@@ -64,4 +64,28 @@ void main() {
     await ProjectRepo.autoAssemble(pid, script(), db: db); // مرّة ثانية
     expect((await ProjectRepo.clips(pid, db: db)).length, 3); // ما يتضاعفوش
   });
+
+  test('addVideoClip: يلصق rushes واحد ورا لآخر ويحدّث المدّة', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    // مشروع سكريبت = 20000ms. نزيدو rush 3s ثمّ 4s.
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 3000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    expect(vids.length, 2);
+    expect(vids[0].startMs, 0);
+    expect(vids[0].outMs, 3000);
+    expect(vids[1].startMs, 3000); // ملصوق ورا الأوّل
+    expect(vids[1].outMs, 4000);
+    expect(vids[1].sourcePath, '/b.mp4');
+
+    // المدّة تبقى 20000 (أكبر من 3000+4000)
+    final p = await ProjectRepo.byId(pid, db: db);
+    expect(p!.durationMs, 20000);
+  });
 }

@@ -1,14 +1,17 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 
 import '../db/database.dart';
 import '../editor/project_repo.dart';
 import '../theme.dart';
 
-/// محرّر الفيديو (Lot 2) — نسخة أولى: يورّي الـtimeline متاع المشروع
-/// (المسارات + الـclips بتوقيتها من الـassemblage auto). التحرير الكامل
-/// (drag/trim/split/export) يجي في increments جايين.
+/// محرّر الفيديو (Lot 2): معاينة (video_player) + timeline متعدّد المسارات.
+/// V02 استيراد rushes + V07 معاينة. التحرير الكامل (trim/split/export) جاي.
 class VideoEditorScreen extends StatefulWidget {
   final int projectId;
   const VideoEditorScreen({super.key, required this.projectId});
@@ -18,7 +21,6 @@ class VideoEditorScreen extends StatefulWidget {
 }
 
 class _VideoEditorScreenState extends State<VideoEditorScreen> {
-  // ترتيب المسارات (كيما CapCut): الفيديو فوق، الموسيقى تحت
   static const _tracks = [
     ('video', '🎬 فيديو'),
     ('overlay', '🖼️ طبقة'),
@@ -31,6 +33,8 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   Project? _project;
   List<Clip> _clips = [];
   bool _loading = true;
+  bool _busy = false;
+  VideoPlayerController? _preview;
 
   @override
   void initState() {
@@ -38,9 +42,29 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _preview?.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final p = await ProjectRepo.byId(widget.projectId);
     final c = await ProjectRepo.clips(widget.projectId);
+    // المعاينة = أول clip فيديو
+    final firstVideo = c.where((x) => x.track == 'video' && x.sourcePath != null);
+    if (firstVideo.isNotEmpty && _preview == null) {
+      final f = File(firstVideo.first.sourcePath!);
+      if (await f.exists()) {
+        final ctrl = VideoPlayerController.file(f);
+        try {
+          await ctrl.initialize();
+          _preview = ctrl;
+        } catch (_) {
+          await ctrl.dispose();
+        }
+      }
+    }
     if (!mounted) return;
     setState(() {
       _project = p;
@@ -48,6 +72,40 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       _loading = false;
     });
   }
+
+  Future<void> _importRush() async {
+    setState(() => _busy = true);
+    try {
+      final x = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (x == null) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+      final copied = await ProjectRepo.importMedia(widget.projectId, x.path);
+      // المدّة
+      final ctrl = VideoPlayerController.file(File(copied));
+      var durMs = 0;
+      try {
+        await ctrl.initialize();
+        durMs = ctrl.value.duration.inMilliseconds;
+      } finally {
+        await ctrl.dispose();
+      }
+      await ProjectRepo.addVideoClip(
+          projectId: widget.projectId, sourcePath: copied, durationMs: durMs);
+      await _preview?.dispose();
+      _preview = null;
+      await _load();
+      if (mounted) _snack('تزاد الفيديو للـtimeline ✅');
+    } catch (e) {
+      if (mounted) _snack('ما نجّمناش نستوردو الفيديو.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   String _clipLabel(Clip c) {
     if (c.sourcePath != null) return c.sourcePath!.split('/').last;
@@ -69,11 +127,12 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
         title: Text(p?.title ?? 'محرّر الفيديو', maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            tooltip: 'استورد rushes (قريباً)',
-            icon: const Icon(Icons.add_photo_alternate_outlined),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('استيراد الـrushes يجي في التحديث الجاي 🎥')),
-            ),
+            tooltip: 'استورد rushes',
+            icon: _busy
+                ? const SizedBox(
+                    width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.add_photo_alternate_outlined),
+            onPressed: _busy ? null : _importRush,
           ),
         ],
       ),
@@ -83,23 +142,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
               ? const Center(child: Text('المشروع ماكانش'))
               : Column(
                   children: [
-                    // معاينة (placeholder — video_player يجي لاحقاً)
-                    AspectRatio(
-                      aspectRatio: 9 / 16,
-                      child: Container(
-                        margin: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Center(
-                          child: Text('👁️ المعاينة\n(تجي مع video_player)',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: AppColors.textMid)),
-                        ),
-                      ),
-                    ),
+                    _previewArea(),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
@@ -112,7 +155,6 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // الـtimeline
                     Expanded(
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
@@ -129,14 +171,56 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton.icon(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('الـexport الكامل بالنصوص يجي قريباً 🎬')),
-                  ),
+                  onPressed: () => _snack('الـexport الكامل بالنصوص يجي قريباً 🎬'),
                   icon: const Icon(Icons.movie_filter_outlined),
                   label: const Text('صدّر MP4'),
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _previewArea() {
+    final ctrl = _preview;
+    final ready = ctrl != null && ctrl.value.isInitialized;
+    return AspectRatio(
+      aspectRatio: 9 / 16,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: ui.Clip.antiAlias,
+        child: ready
+            ? GestureDetector(
+                onTap: () => setState(
+                    () => ctrl.value.isPlaying ? ctrl.pause() : ctrl.play()),
+                child: Stack(
+                  fit: StackFit.expand,
+                  alignment: Alignment.center,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.contain,
+                      child: SizedBox(
+                        width: ctrl.value.size.width,
+                        height: ctrl.value.size.height,
+                        child: VideoPlayer(ctrl),
+                      ),
+                    ),
+                    if (!ctrl.value.isPlaying)
+                      const Icon(Icons.play_circle_fill,
+                          size: 56, color: Colors.white70),
+                  ],
+                ),
+              )
+            : const Center(
+                child: Text('👁️ المعاينة\nاستورد فيديو من ➕ فوق',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textMid)),
+              ),
+      ),
     );
   }
 
@@ -156,14 +240,12 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                 height: 34,
                 child: Stack(
                   children: [
-                    // خلفية المسار
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.bgSecondary,
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    // الـclips
                     for (final clip in clips)
                       Positioned(
                         left: (clip.startMs / durMs * w).clamp(0, w - 2),
@@ -175,9 +257,13 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           padding: const EdgeInsets.symmetric(horizontal: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.cyan.withValues(alpha: 0.22),
+                            color: track == 'video'
+                                ? AppColors.rose.withValues(alpha: 0.22)
+                                : AppColors.cyan.withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(5),
-                            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.5)),
+                            border: Border.all(
+                                color: (track == 'video' ? AppColors.rose : AppColors.cyan)
+                                    .withValues(alpha: 0.5)),
                           ),
                           alignment: Alignment.centerRight,
                           child: Text(_clipLabel(clip),
