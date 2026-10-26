@@ -122,13 +122,73 @@ void main() {
     final a = (await ProjectRepo.clips(pid, db: db))
         .firstWhere((c) => c.sourcePath == '/a.mp4');
     await ProjectRepo.trimVideoClip(
-        projectId: pid, clipId: a.id, outMs: 2000, db: db);
+        projectId: pid, clipId: a.id, durationMs: 2000, db: db);
 
     final vids = (await ProjectRepo.clips(pid, db: db))
         .where((c) => c.track == 'video')
         .toList()
       ..sort((x, y) => x.startMs.compareTo(y.startMs));
-    expect(vids[0].outMs, 2000);
+    expect(ProjectRepo.clipDuration(vids[0]), 2000);
     expect(vids[1].startMs, 2000); // b انزاح ورا a المقصوص
+  });
+
+  test('splitVideoClip: يقسم لجوجة ويحافظ على نافذة المصدر', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 6000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+    await ProjectRepo.splitVideoClip(
+        projectId: pid, clipId: a.id, atMs: 2000, db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    expect(vids.length, 3); // a → a1 + a2، ثمّ b
+    // a1: المصدر [0..2000]
+    expect(vids[0].inMs, 0);
+    expect(vids[0].outMs, 2000);
+    expect(vids[0].startMs, 0);
+    // a2: المصدر [2000..6000] = باقي /a.mp4
+    expect(vids[1].sourcePath, '/a.mp4');
+    expect(vids[1].inMs, 2000);
+    expect(vids[1].outMs, 6000);
+    expect(vids[1].startMs, 2000);
+    // b انزاح ورا (2000+4000=6000)
+    expect(vids[2].sourcePath, '/b.mp4');
+    expect(vids[2].startMs, 6000);
+  });
+
+  test('reorderVideoClips: السحب يبدّل الترتيب ويعاود يلصق', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 3000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/c.mp4', durationMs: 5000, db: db);
+
+    final byPath = {
+      for (final c in await ProjectRepo.clips(pid, db: db))
+        if (c.track == 'video') c.sourcePath: c.id
+    };
+    // نرتّبهم عكسي: c, b, a
+    await ProjectRepo.reorderVideoClips(
+        projectId: pid,
+        orderedIds: [byPath['/c.mp4']!, byPath['/b.mp4']!, byPath['/a.mp4']!],
+        db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    expect(vids.map((v) => v.sourcePath), ['/c.mp4', '/b.mp4', '/a.mp4']);
+    expect(vids[0].startMs, 0); // c: 0..5000
+    expect(vids[1].startMs, 5000); // b: 5000..9000
+    expect(vids[2].startMs, 9000); // a: 9000..12000
   });
 }

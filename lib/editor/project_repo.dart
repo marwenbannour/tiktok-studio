@@ -61,6 +61,12 @@ class ProjectRepo {
     await d.replaceClips(projectId, out);
   }
 
+  /// المدّة الظاهرة متاع clip = نافذة المصدر [inMs..outMs].
+  static int clipDuration(Clip c) {
+    final d = c.outMs - c.inMs;
+    return d > 0 ? d : 0;
+  }
+
   /// V02: يزيد clip فيديو في آخر مسار الفيديو، ويحدّث مدّة المشروع.
   /// (منطق DB نقي — قابل للاختبار؛ نسخ الملف في [importMedia] منفصل.)
   static Future<void> addVideoClip({
@@ -71,19 +77,15 @@ class ProjectRepo {
   }) async {
     final d = _resolve(db);
     final videos = (await d.projectClips(projectId)).where((c) => c.track == 'video');
-    final startMs = videos.fold<int>(0, (acc, c) => acc + (c.outMs > 0 ? c.outMs : 0));
+    final startMs = videos.fold<int>(0, (acc, c) => acc + clipDuration(c));
     await d.addClip(ClipsCompanion.insert(
       projectId: projectId,
       track: 'video',
       sourcePath: Value(sourcePath),
       startMs: startMs,
-      outMs: Value(durationMs),
+      outMs: Value(durationMs), // inMs=0 → المدّة = durationMs
     ));
-    final p = await d.projectById(projectId);
-    final newDur = (startMs + durationMs) > (p?.durationMs ?? 0)
-        ? (startMs + durationMs)
-        : (p?.durationMs ?? 0);
-    await d.touchProject(projectId, durationMs: newDur);
+    await _resequenceVideo(projectId, d);
   }
 
   /// ينسخ ملف media لمجلّد خاصّ بالمشروع، ويرجّع المسار الجديد. (I/O)
@@ -108,16 +110,64 @@ class ProjectRepo {
     await _resequenceVideo(projectId, d);
   }
 
-  /// V05: يقصّ clip فيديو (يبدّل المدّة الظاهرة outMs) ويعاود يرتّب المسار.
+  /// V05: يقصّ clip فيديو للمدّة الظاهرة [durationMs] (ضمن نافذة المصدر).
   static Future<void> trimVideoClip({
     required int projectId,
     required int clipId,
-    required int outMs,
+    required int durationMs,
     AppDatabase? db,
   }) async {
     final d = _resolve(db);
-    final safe = outMs < 200 ? 200 : outMs; // أدنى 0.2s
-    await d.updateClip(clipId, ClipsCompanion(outMs: Value(safe)));
+    final c = (await d.projectClips(projectId)).firstWhere((x) => x.id == clipId);
+    final safe = durationMs < 200 ? 200 : durationMs; // أدنى 0.2s
+    await d.updateClip(clipId, ClipsCompanion(outMs: Value(c.inMs + safe)));
+    await _resequenceVideo(projectId, d);
+  }
+
+  /// V05: يقسم clip فيديو عند [atMs] (إزاحة من بداية الـclip) لجوجة.
+  static Future<void> splitVideoClip({
+    required int projectId,
+    required int clipId,
+    required int atMs,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final c = (await d.projectClips(projectId)).firstWhere((x) => x.id == clipId);
+    final dur = clipDuration(c);
+    if (atMs <= 100 || atMs >= dur - 100) return; // ماكانش قسمة معقولة
+    final cut = c.inMs + atMs;
+    // الجزء الأوّل = الـclip الأصلي (ينتهي عند القطع)
+    await d.updateClip(clipId, ClipsCompanion(outMs: Value(cut)));
+    // الجزء الثاني = clip جديد يكمّل نافذة المصدر
+    await d.addClip(ClipsCompanion.insert(
+      projectId: projectId,
+      track: 'video',
+      sourcePath: Value(c.sourcePath),
+      startMs: c.startMs + atMs,
+      inMs: Value(cut),
+      outMs: Value(c.outMs),
+      speed: Value(c.speed),
+      zOrder: Value(c.zOrder),
+      props: Value(c.props),
+    ));
+    await _resequenceVideo(projectId, d);
+  }
+
+  /// V05: يعيد ترتيب clips الفيديو حسب تسلسل [orderedIds] (drag & drop).
+  static Future<void> reorderVideoClips({
+    required int projectId,
+    required List<int> orderedIds,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final byId = {for (final c in await d.projectClips(projectId)) c.id: c};
+    var cursor = 0;
+    for (final id in orderedIds) {
+      final c = byId[id];
+      if (c == null || c.track != 'video') continue;
+      await d.updateClip(id, ClipsCompanion(startMs: Value(cursor)));
+      cursor += clipDuration(c);
+    }
     await _resequenceVideo(projectId, d);
   }
 
@@ -131,13 +181,13 @@ class ProjectRepo {
       if (v.startMs != cursor) {
         await d.updateClip(v.id, ClipsCompanion(startMs: Value(cursor)));
       }
-      cursor += v.outMs > 0 ? v.outMs : 0;
+      cursor += clipDuration(v);
     }
     // المدّة = أقصى نهاية بين كل الـclips (فيديو + نصوص/ترجمة)
     var maxEnd = cursor;
     for (final c in clips) {
       if (c.track == 'video') continue;
-      final end = c.startMs + (c.outMs > 0 ? c.outMs : 0);
+      final end = c.startMs + clipDuration(c);
       if (end > maxEnd) maxEnd = end;
     }
     await d.touchProject(projectId, durationMs: maxEnd);

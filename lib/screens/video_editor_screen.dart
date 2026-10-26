@@ -107,13 +107,16 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  /// V05: يحرّر clip فيديو — قصّ المدّة (trim) ولا فسخ.
+  /// V05: يحرّر clip فيديو — قصّ (trim)، قسمة (split)، ولا فسخ.
   Future<void> _editVideoClip(Clip clip) async {
-    var outMs = (clip.outMs > 0 ? clip.outMs : 1000).toDouble();
-    final maxMs = outMs; // المدّة الأصلية = الحدّ الأقصى للقصّ
-    final changed = await showModalBottomSheet<bool>(
+    final dur = ProjectRepo.clipDuration(clip).toDouble();
+    final maxDur = dur < 400 ? 400.0 : dur;
+    var trimMs = dur < 200 ? 200.0 : dur;
+    var splitMs = dur / 2;
+    final action = await showModalBottomSheet<(String, int)>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) => Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -126,19 +129,18 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(ctx).textTheme.titleMedium),
               const SizedBox(height: 12),
-              Text('✂️ المدّة: ${(outMs / 1000).toStringAsFixed(1)}s'),
+              Text('✂️ قصّ المدّة: ${(trimMs / 1000).toStringAsFixed(1)}s'),
               Slider(
-                value: outMs,
+                value: trimMs.clamp(200, maxDur).toDouble(),
                 min: 200,
-                max: maxMs < 200 ? 200 : maxMs,
-                onChanged: (v) => setSheet(() => outMs = v),
+                max: maxDur,
+                onChanged: (v) => setSheet(() => trimMs = v),
               ),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(ctx, false),
+                      onPressed: () => Navigator.pop(ctx, ('delete', 0)),
                       icon: const Icon(Icons.delete_outline, color: AppColors.rose),
                       label: const Text('فسخ', style: TextStyle(color: AppColors.rose)),
                     ),
@@ -146,28 +148,123 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => Navigator.pop(ctx, true),
+                      onPressed: () => Navigator.pop(ctx, ('trim', trimMs.round())),
                       icon: const Icon(Icons.content_cut),
                       label: const Text('قصّ'),
                     ),
                   ),
                 ],
               ),
+              const Divider(height: 28),
+              Text('✁ قسّم عند: ${(splitMs / 1000).toStringAsFixed(1)}s'),
+              Slider(
+                value: splitMs.clamp(0, maxDur).toDouble(),
+                min: 0,
+                max: maxDur,
+                onChanged: dur <= 400
+                    ? null // قصير برشة باش يتقسّم
+                    : (v) => setSheet(() => splitMs = v),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: dur <= 400
+                      ? null
+                      : () => Navigator.pop(ctx, ('split', splitMs.round())),
+                  icon: const Icon(Icons.call_split),
+                  label: const Text('قسّم لجوجة'),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
-    if (changed == null) return; // تسكّر بلا اختيار
-    if (changed) {
-      await ProjectRepo.trimVideoClip(
-          projectId: widget.projectId, clipId: clip.id, outMs: outMs.round());
-    } else {
-      await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
-      await _preview?.dispose();
-      _preview = null;
+    if (action == null) return; // تسكّر بلا اختيار
+    switch (action.$1) {
+      case 'trim':
+        await ProjectRepo.trimVideoClip(
+            projectId: widget.projectId, clipId: clip.id, durationMs: action.$2);
+      case 'split':
+        await ProjectRepo.splitVideoClip(
+            projectId: widget.projectId, clipId: clip.id, atMs: action.$2);
+      case 'delete':
+        await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
+        await _preview?.dispose();
+        _preview = null;
     }
     await _load();
+  }
+
+  /// V05: رتّب clips الفيديو بالسحب (ReorderableListView).
+  Future<void> _reorderClips() async {
+    final videos = _clips.where((c) => c.track == 'video').toList()
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    if (videos.length < 2) {
+      _snack('رتّب يحتاج زوز clips فيديو على الأقلّ.');
+      return;
+    }
+    final items = List<Clip>.from(videos);
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('⇅ رتّب الفيديوهات (اسحب)',
+                    style: Theme.of(ctx).textTheme.titleMedium),
+              ),
+              Flexible(
+                child: ReorderableListView(
+                  shrinkWrap: true,
+                  buildDefaultDragHandles: false,
+                  onReorderItem: (oldI, newI) => setSheet(() {
+                    items.insert(newI, items.removeAt(oldI));
+                  }),
+                  children: [
+                    for (var i = 0; i < items.length; i++)
+                      ListTile(
+                        key: ValueKey(items[i].id),
+                        leading: CircleAvatar(
+                            radius: 13,
+                            backgroundColor: AppColors.rose.withValues(alpha: 0.25),
+                            child: Text('${i + 1}',
+                                style: const TextStyle(fontSize: 12))),
+                        title: Text(items[i].sourcePath?.split('/').last ?? 'clip',
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                            '${(ProjectRepo.clipDuration(items[i]) / 1000).toStringAsFixed(1)}s'),
+                        trailing: ReorderableDragStartListener(
+                            index: i, child: const Icon(Icons.drag_handle)),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('تمّ')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (applied == true) {
+      await ProjectRepo.reorderVideoClips(
+          projectId: widget.projectId,
+          orderedIds: items.map((c) => c.id).toList());
+      await _load();
+    }
   }
 
   String _clipLabel(Clip c) {
@@ -189,6 +286,11 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       appBar: AppBar(
         title: Text(p?.title ?? 'محرّر الفيديو', maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            tooltip: 'رتّب الفيديوهات',
+            icon: const Icon(Icons.swap_vert),
+            onPressed: _busy ? null : _reorderClips,
+          ),
           IconButton(
             tooltip: 'استورد rushes',
             icon: _busy
@@ -311,9 +413,11 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                     ),
                     for (final clip in clips)
                       Positioned(
-                        left: (clip.startMs / durMs * w).clamp(0, w - 2),
-                        width: ((clip.outMs <= 0 ? durMs : clip.outMs) / durMs * w)
-                            .clamp(10, w),
+                        left: (clip.startMs / durMs * w).clamp(0.0, w - 2),
+                        width: (() {
+                          final cd = ProjectRepo.clipDuration(clip);
+                          return ((cd <= 0 ? durMs : cd) / durMs * w).clamp(10.0, w);
+                        })(),
                         top: 0,
                         bottom: 0,
                         child: GestureDetector(
