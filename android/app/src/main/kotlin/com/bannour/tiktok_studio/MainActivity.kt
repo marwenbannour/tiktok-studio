@@ -1,6 +1,10 @@
 package com.bannour.tiktok_studio
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
+import android.media.MediaMetadataRetriever
+import java.io.File
 import android.graphics.Typeface
 import android.os.SystemClock
 import android.text.Layout
@@ -38,6 +42,8 @@ import io.flutter.plugin.common.MethodChannel
 ///  - exportComposition() : دمج عدّة clips + نصوص/ترجمة موقّتة (V21).
 class MainActivity : FlutterActivity() {
     private val channelName = "studio/video_engine"
+    private val reqPickAudio = 7001
+    private var pendingPick: MethodChannel.Result? = null
 
     @OptIn(UnstableApi::class)
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -56,9 +62,65 @@ class MainActivity : FlutterActivity() {
                         call.argument("width") ?: 1080,
                         call.argument("height") ?: 1920,
                         result)
+                    "probeDuration" -> result.success(probeDuration(call.argument("path")!!))
+                    "pickAudio" -> pickAudio(result)
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /// مدّة ملف صوت/فيديو بالـms (MediaMetadataRetriever).
+    private fun probeDuration(path: String): Long {
+        val r = MediaMetadataRetriever()
+        return try {
+            r.setDataSource(path)
+            r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } catch (_: Exception) {
+            0L
+        } finally {
+            try { r.release() } catch (_: Exception) {}
+        }
+    }
+
+    /// يفتح منتقي صوت النظام (SAF)، ينسخ المختار لملف مؤقّت، ويرجّع مسارو.
+    /// (نتفادو file_picker — يتعارض مع win32 متاع share_plus/secure_storage.)
+    private fun pickAudio(result: MethodChannel.Result) {
+        if (pendingPick != null) {
+            result.error("busy", "اختيار صوت جاري", null); return
+        }
+        pendingPick = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+        }
+        try {
+            startActivityForResult(intent, reqPickAudio)
+        } catch (e: Exception) {
+            pendingPick = null
+            result.error("no_picker", e.message, null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != reqPickAudio) return
+        val res = pendingPick ?: return
+        pendingPick = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            res.success(null); return // ألغى المستعمل
+        }
+        try {
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "audio"
+            val ext = contentResolver.getType(uri)?.substringAfterLast('/')?.let { ".$it" } ?: ".m4a"
+            val dest = File(cacheDir, "pick_${System.currentTimeMillis()}_$name$ext")
+            contentResolver.openInputStream(uri)!!.use { input ->
+                dest.outputStream().use { out -> input.copyTo(out) }
+            }
+            res.success(dest.absolutePath)
+        } catch (e: Exception) {
+            res.error("copy_failed", e.message, null)
+        }
     }
 
     /// حدث نصّ موقّت مع التنسيق الجاهز (span).

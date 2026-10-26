@@ -53,4 +53,14 @@ class VideoEngine {
       output: (r?['output'] as String?) ?? output,
     );
   }
+
+  /// مدّة ملف صوت/فيديو بالـms (MediaMetadataRetriever).
+  static Future<int> probeDuration(String path) async {
+    final ms = await _ch.invokeMethod<int>('probeDuration', {'path': path});
+    return ms ?? 0;
+  }
+
+  /// V12: يفتح منتقي صوت النظام؛ يرجّع مسار نسخة مؤقّتة، ولا null إذا ألغى.
+  static Future<String?> pickAudio() =>
+      _ch.invokeMethod<String>('pickAudio');
 }

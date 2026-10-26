@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import '../db/database.dart';
@@ -104,6 +107,127 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       if (mounted) _snack('ما نجّمناش نستوردو الفيديو.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// V11: يسجّل voix off ويزيدو clip صوت.
+  Future<void> _recordVoice() async {
+    final rec = AudioRecorder();
+    try {
+      if (!await rec.hasPermission()) {
+        if (mounted) _snack('يلزم إذن الميكرو للتسجيل.');
+        await rec.dispose();
+        return;
+      }
+      final base = await getApplicationDocumentsDirectory();
+      final dir = Directory('${base.path}/projects/${widget.projectId}');
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await rec.start(const RecordConfig(), path: path);
+
+      if (!mounted) {
+        await rec.stop();
+        await rec.dispose();
+        return;
+      }
+      // dialog تسجيل: مؤقّت + وقّف
+      final start = DateTime.now();
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => _RecordingDialog(start: start),
+      );
+      final out = await rec.stop();
+      await rec.dispose();
+      if (out == null) return;
+      final dur = await VideoEngine.probeDuration(out);
+      await ProjectRepo.addVoiceClip(
+          projectId: widget.projectId,
+          sourcePath: out,
+          durationMs: dur > 0 ? dur : DateTime.now().difference(start).inMilliseconds);
+      await _load();
+      if (mounted) _snack('تزاد التسجيل (voix off) ✅');
+    } catch (e) {
+      await rec.dispose();
+      if (mounted) _snack('فشل التسجيل: $e');
+    }
+  }
+
+  /// V12: يختار موسيقى من النظام ويحطّها خلفية.
+  Future<void> _pickMusic() async {
+    setState(() => _busy = true);
+    try {
+      final picked = await VideoEngine.pickAudio();
+      if (picked == null) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+      final dest = await ProjectRepo.importMedia(widget.projectId, picked);
+      final dur = await VideoEngine.probeDuration(dest);
+      await ProjectRepo.setMusic(
+          projectId: widget.projectId, sourcePath: dest, durationMs: dur);
+      await _load();
+      if (mounted) _snack('تزادت الموسيقى الخلفية 🎵');
+    } catch (e) {
+      if (mounted) _snack('فشل اختيار الموسيقى: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// V11/V12: يحرّر clip صوت (voix off / موسيقى) — الحجم + فسخ.
+  Future<void> _editAudioClip(Clip clip) async {
+    var vol = ProjectRepo.volumeOf(clip);
+    final isMusic = clip.track == 'music';
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isMusic ? '🎵 موسيقى خلفية' : '🎙️ voix off',
+                  style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Text('🔊 الحجم: ${(vol * 100).round()}%'),
+              Slider(
+                value: vol.clamp(0.0, 1.0),
+                onChanged: (v) => setSheet(() => vol = v),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(ctx, 'delete'),
+                      icon: const Icon(Icons.delete_outline, color: AppColors.rose),
+                      label: const Text('فسخ', style: TextStyle(color: AppColors.rose)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(ctx, 'save'),
+                      icon: const Icon(Icons.check),
+                      label: const Text('حفظ'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == 'save') {
+      await ProjectRepo.setVolume(clip.id, vol);
+      await _load();
+    } else if (action == 'delete') {
+      await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
+      await _load();
     }
   }
 
@@ -475,13 +599,23 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
             icon: const Icon(Icons.swap_vert),
             onPressed: _busy ? null : _reorderClips,
           ),
-          IconButton(
-            tooltip: 'استورد rushes',
+          PopupMenuButton<String>(
+            tooltip: 'زيد',
+            enabled: !_busy,
             icon: _busy
                 ? const SizedBox(
                     width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.add_photo_alternate_outlined),
-            onPressed: _busy ? null : _importRush,
+                : const Icon(Icons.add_circle_outline),
+            onSelected: (v) {
+              if (v == 'rush') _importRush();
+              if (v == 'voice') _recordVoice();
+              if (v == 'music') _pickMusic();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'rush', child: Text('🎬 استورد rushes')),
+              PopupMenuItem(value: 'voice', child: Text('🎙️ سجّل voix off')),
+              PopupMenuItem(value: 'music', child: Text('🎵 زيد موسيقى')),
+            ],
           ),
         ],
       ),
@@ -615,7 +749,9 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                               ? () => _editVideoClip(clip)
                               : (track == 'text' || track == 'subtitle')
                                   ? () => _editTextClip(clip)
-                                  : null,
+                                  : (track == 'voice' || track == 'music')
+                                      ? () => _editAudioClip(clip)
+                                      : null,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 1),
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -643,6 +779,58 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// dialog تسجيل voix off: مؤقّت حيّ + زرّ وقّف.
+class _RecordingDialog extends StatefulWidget {
+  final DateTime start;
+  const _RecordingDialog({required this.start});
+
+  @override
+  State<_RecordingDialog> createState() => _RecordingDialogState();
+}
+
+class _RecordingDialogState extends State<_RecordingDialog> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = DateTime.now().difference(widget.start).inSeconds;
+    final mm = (s ~/ 60).toString().padLeft(2, '0');
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.mic, color: AppColors.rose, size: 48),
+          const SizedBox(height: 12),
+          Text('🔴 يسجّل… $mm:$ss',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ],
+      ),
+      actions: [
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.stop),
+          label: const Text('وقّف'),
+        ),
+      ],
     );
   }
 }
