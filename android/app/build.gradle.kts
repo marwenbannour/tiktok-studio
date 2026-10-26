@@ -81,4 +81,9 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // محرّك export الفيديو (Lot 2): Media3 Transformer + Effect (نصّ على الفيديو)
+    val media3 = "1.5.1"
+    implementation("androidx.media3:media3-transformer:$media3")
+    implementation("androidx.media3:media3-effect:$media3")
+    implementation("androidx.media3:media3-common:$media3")
 }

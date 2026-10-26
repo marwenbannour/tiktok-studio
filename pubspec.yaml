@@ -41,3 +41,4 @@ flutter:
   # (cold start أسرع + يخدم offline — NFR «connexion instable»، وما يطيحش التست)
   assets:
     - google_fonts/
+    - assets/sample.mp4
