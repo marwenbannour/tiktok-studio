@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,6 +41,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   List<Clip> _clips = [];
   bool _loading = true;
   bool _busy = false;
+  bool _exporting = false;
   VideoPlayerController? _preview;
 
   // V19: undo/redo — snapshots للـclips فالذاكرة (50 خطوة)
@@ -276,10 +278,14 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       _snack('زيد فيديو واحد على الأقلّ قبل الـexport (➕ فوق).');
       return;
     }
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _exporting = true;
+    });
+    String? out;
     try {
       final base = await getApplicationDocumentsDirectory();
-      final out =
+      out =
           '${base.path}/projects/${widget.projectId}/export_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final p = _project!;
       final r = await VideoEngine.exportComposition(
@@ -299,11 +305,50 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
         _snack('تصدّر فالـgalerie ✅ (${(r.ms / 1000).toStringAsFixed(1)}s)');
       }
     } catch (e) {
-      if (mounted) _snack('فشل الـexport: $e');
+      if (!mounted) return;
+      if (VideoEngine.isCancelled(e)) {
+        if (out != null) File(out).delete().ignore(); // ما نخلّيوش ملف نصّو
+        _snack('تلغى الـexport.');
+      } else {
+        _snack('فشل الـexport: ${e is PlatformException ? (e.message ?? e.code) : e}');
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _exporting = false;
+        });
+      }
     }
   }
+
+  /// شريط الـexport: التقدّم بالنسبة المئوية + زرّ إلغاء.
+  Widget _exportBar() => ValueListenableBuilder<double?>(
+        valueListenable: VideoEngine.progress,
+        builder: (context, p, _) => Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(p == null ? 'نحضّر الـexport…' : 'يصدّر… ${(p * 100).round()}%'),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(value: p, minHeight: 6),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            const OutlinedButton(
+              onPressed: VideoEngine.cancelExport,
+              child: Text('إلغاء'),
+            ),
+          ],
+        ),
+      );
 
   /// V08: محرّر تنسيق النصّ/الترجمة — نصّ، لون، حجم، محاذاة، bold.
   Future<void> _editTextClip(Clip clip) async {
@@ -825,17 +870,19 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _export,
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.movie_filter_outlined),
-                  label: Text(_busy ? 'يصدّر…' : 'صدّر MP4'),
-                ),
+                child: _exporting
+                    ? _exportBar()
+                    : FilledButton.icon(
+                        onPressed: _busy ? null : _export,
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.movie_filter_outlined),
+                        label: const Text('صدّر MP4'),
+                      ),
               ),
             ),
     );

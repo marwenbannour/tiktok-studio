@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'auth.dart';
 import 'storage.dart';
 
 class ClaudeException implements Exception {
@@ -32,12 +33,21 @@ class ClaudeApi {
   final String? backendUrl;
   final String? appToken;
 
+  /// يجيب الـaccess token متاع الحساب (افتراضياً [Auth.validToken]).
+  final Future<String?> Function() _sessionToken;
+
+  /// يجدّد الـtoken كي يرجع 401 (افتراضياً [Auth.refresh]).
+  final Future<String?> Function() _refreshToken;
+
   ClaudeApi({
     required this.apiKey,
     required this.model,
     this.backendUrl,
     this.appToken,
-  });
+    Future<String?> Function()? sessionToken,
+    Future<String?> Function()? refreshToken,
+  })  : _sessionToken = sessionToken ?? Auth.validToken,
+        _refreshToken = refreshToken ?? Auth.refresh;
 
   bool get usesBackend => (backendUrl?.trim().isNotEmpty) ?? false;
 
@@ -64,28 +74,43 @@ class ClaudeApi {
       'زيد مفتاح الـAPI (ولا عنوان السيرفر) في «الإعدادات» قبل.';
 
   Future<String> ask(String prompt, {int maxTokens = 4000, bool json = false}) async {
-    final headers = <String, String>{'content-type': 'application/json'};
-    if (usesBackend) {
-      if ((appToken ?? '').isNotEmpty) headers['x-app-token'] = appToken!;
-    } else {
-      headers['authorization'] = 'Bearer $apiKey';
-    }
+    final payload = jsonEncode({
+      'model': model,
+      'stream': false,
+      if (json) 'format': 'json',
+      'options': {'num_predict': maxTokens},
+      'messages': [
+        {'role': 'user', 'content': prompt}
+      ],
+    });
 
-    final res = await http
+    Future<http.Response> send(Map<String, String> headers) => http
         .post(
           Uri.parse(usesBackend ? backendUrl!.trim() : _ollamaUrl),
-          headers: headers,
-          body: jsonEncode({
-            'model': model,
-            'stream': false,
-            if (json) 'format': 'json',
-            'options': {'num_predict': maxTokens},
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-          }),
+          headers: {'content-type': 'application/json', ...headers},
+          body: payload,
         )
         .timeout(const Duration(seconds: 120));
+
+    http.Response res;
+    if (!usesBackend) {
+      res = await send({'authorization': 'Bearer $apiKey'});
+    } else {
+      // الأولوية للحساب (JWT متاع Supabase): السيرفر يعرف شكون ويطبّق حدّو اليومي.
+      // بلا حساب → x-app-token (وضع صاحب المشروع).
+      final token = await _sessionToken();
+      if (token != null) {
+        res = await send({'authorization': 'Bearer $token'});
+        if (res.statusCode == 401) {
+          final fresh = await _refreshToken();
+          if (fresh != null) res = await send({'authorization': 'Bearer $fresh'});
+        }
+      } else if ((appToken ?? '').isNotEmpty) {
+        res = await send({'x-app-token': appToken!});
+      } else {
+        throw ClaudeException('ادخل لحسابك (ولا زيد كلمة سرّ السيرفر) في «الإعدادات».');
+      }
+    }
 
     dynamic body;
     try {
@@ -96,6 +121,16 @@ class ClaudeApi {
 
     if (res.statusCode != 200) {
       final err = body is Map ? body['error'] : null;
+      if (res.statusCode == 429 && err == 'daily limit reached') {
+        final limit = body is Map ? body['limit'] : null;
+        throw ClaudeException(
+            'وصلت للحدّ اليومي${limit is num ? ' ($limit توليد)' : ''}. ارجع غدوة 🙏',
+            apiMessage: '$err');
+      }
+      if (res.statusCode == 403 && err == 'model not allowed') {
+        throw ClaudeException('الموديل هذا موش مسموح في السيرفر. اختار موديل آخر في «الإعدادات».',
+            apiMessage: '$err');
+      }
       throw ClaudeException(_friendly(res.statusCode),
           apiMessage: err is String ? err : (err is Map ? '${err['message']}' : null));
     }

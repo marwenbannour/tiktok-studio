@@ -1,7 +1,14 @@
 package com.bannour.tiktok_studio
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.FileProvider
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
@@ -55,11 +62,17 @@ class MainActivity : FlutterActivity() {
     private val reqPickAudio = 7001
     private var pendingPick: MethodChannel.Result? = null
 
+    // export جاري: باش نبعثو التقدّم لـFlutter وننجمو نلغيوه
+    private var channel: MethodChannel? = null
+    private var activeTransformer: Transformer? = null
+    private var activeResult: MethodChannel.Result? = null
+    private val progressHandler = Handler(Looper.getMainLooper())
+
     @OptIn(UnstableApi::class)
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
-            .setMethodCallHandler { call, result ->
+        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+        channel!!.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "export" -> export(call.argument("input")!!, call.argument("output")!!,
                         call.argument("text") ?: "", call.argument("width") ?: 1080,
@@ -75,9 +88,117 @@ class MainActivity : FlutterActivity() {
                     "probeDuration" -> result.success(probeDuration(call.argument("path")!!))
                     "probeInfo" -> result.success(probeInfo(call.argument("path")!!))
                     "pickAudio" -> pickAudio(result)
+                    "cancelExport" -> { cancelExport(); result.success(null) }
+                    "isAppInstalled" -> result.success(isAppInstalled(call.argument("package")!!))
+                    "shareToApp" -> shareToApp(
+                        call.argument("path")!!,
+                        call.argument("package")!!,
+                        call.argument("mime") ?: "video/mp4",
+                        result)
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // ---------------------------------------------------------------- CapCut
+
+    /// التطبيق [pkg] منصّب؟ (يستحقّ <queries> في الـmanifest على Android 11+)
+    private fun isAppInstalled(pkg: String): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(pkg, 0)
+        }
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /// يبعث ملف [path] لتطبيق [pkg] (ACTION_SEND + FileProvider).
+    /// يرجّع false كان التطبيق موش منصّب ولا ما قبلش → Dart يطلّع menu المشاركة.
+    /// الملف كان موش في dossier يخدمو الـprovider، يتنسخ في cache/capcut
+    /// على thread آخر (فيديو كبير ما يجمّدش الـUI).
+    private fun shareToApp(path: String, pkg: String, mime: String, result: MethodChannel.Result) {
+        if (!isAppInstalled(pkg)) { result.success(false); return }
+        val src = File(path)
+        if (!src.exists()) { result.error("not_found", "الملف موش موجود", null); return }
+        val main = Handler(Looper.getMainLooper())
+        Thread {
+            try {
+                val uri = try {
+                    FileProvider.getUriForFile(this, "$packageName.capcut_provider", src)
+                } catch (_: IllegalArgumentException) {
+                    val dir = File(cacheDir, "capcut").apply { mkdirs() }
+                    val copy = File(dir, src.name)
+                    src.copyTo(copy, overwrite = true)
+                    FileProvider.getUriForFile(this, "$packageName.capcut_provider", copy)
+                }
+                main.post {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = mime
+                        setPackage(pkg)
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (_: ActivityNotFoundException) {
+                        result.success(false)
+                    }
+                }
+            } catch (e: Exception) {
+                main.post { result.error("share_failed", e.message, null) }
+            }
+        }.start()
+    }
+
+    // ---------------------------------------------------------- export state
+
+    /// يبدا export: export واحد في نفس الوقت، ونبعثو التقدّم (0–100) كل 250 ms.
+    @OptIn(UnstableApi::class)
+    private fun startTracked(transformer: Transformer, result: MethodChannel.Result, start: () -> Unit) {
+        if (activeTransformer != null) {
+            result.error("busy", "فمّا export آخر جاري", null); return
+        }
+        activeTransformer = transformer
+        activeResult = result
+        try {
+            start()
+        } catch (e: Exception) {
+            // الـcatch متاع المنادي يجاوب؛ إحنا نفرّغو الحالة برك
+            activeTransformer = null
+            activeResult = null
+            throw e
+        }
+        val holder = androidx.media3.transformer.ProgressHolder()
+        progressHandler.post(object : Runnable {
+            override fun run() {
+                val t = activeTransformer ?: return
+                if (t.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
+                    channel?.invokeMethod("exportProgress", holder.progress)
+                }
+                progressHandler.postDelayed(this, 250)
+            }
+        })
+    }
+
+    /// يكمّل الـexport (نجاح ولا فشل): يرجّع النتيجة مرّة وحدة ويوقّف التقدّم.
+    private fun finishTracked(reply: (MethodChannel.Result) -> Unit) {
+        val r = activeResult ?: return
+        activeResult = null
+        activeTransformer = null
+        progressHandler.removeCallbacksAndMessages(null)
+        reply(r)
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun cancelExport() {
+        val t = activeTransformer ?: return
+        t.cancel() // Media3 ما ينادي حتى listener بعد cancel → نجاوبو إحنا
+        finishTracked { it.error("cancelled", "تلغى الـexport", null) }
     }
 
     /// مدّة ملف صوت/فيديو بالـms (MediaMetadataRetriever).
@@ -277,17 +398,27 @@ class MainActivity : FlutterActivity() {
 
     /// يبني سلسلة صوت (voix off / موسيقى): كل clip فبلاصتو عبر gaps (سكوت)،
     /// بلا فيديو، مع تحجيم الصوت (volume) عبر ChannelMixingAudioProcessor.
+    /// صوت (voix off ولا موسيقى) → séquences. الـclips اللي يتقاطعو ما يتدفّوش
+    /// لقدّام (كيما قبل): كل clip يتقاطع يمشي في séquence (lane) وحدو،
+    /// والـComposition يمزجهم الكل في نفس الوقت → التوقيت يبقى مضبوط.
     @OptIn(UnstableApi::class)
-    private fun audioSequence(items: List<Map<String, Any>>): EditedMediaItemSequence? {
-        if (items.isEmpty()) return null
+    private fun audioSequences(items: List<Map<String, Any>>): List<EditedMediaItemSequence> {
+        if (items.isEmpty()) return emptyList()
+        class Lane(val builder: EditedMediaItemSequence.Builder, var cursor: Long)
+        val lanes = ArrayList<Lane>()
         val sorted = items.sortedBy { (it["startMs"] as Number).toLong() }
-        val b = EditedMediaItemSequence.Builder().experimentalSetForceAudioTrack(true)
-        var cursor = 0L
         for (a in sorted) {
             val start = (a["startMs"] as Number).toLong()
-            if (start > cursor) { b.addGap((start - cursor) * 1000); cursor = start }
             val inMs = (a["inMs"] as Number).toLong()
             val outMs = (a["outMs"] as Number).toLong()
+            if (outMs <= inMs) continue
+            val lane = lanes.firstOrNull { it.cursor <= start } ?: Lane(
+                EditedMediaItemSequence.Builder().experimentalSetForceAudioTrack(true), 0L
+            ).also { lanes.add(it) }
+            if (start > lane.cursor) {
+                lane.builder.addGap((start - lane.cursor) * 1000)
+                lane.cursor = start
+            }
             val mi = MediaItem.Builder()
                 .setUri(a["path"] as String)
                 .setClippingConfiguration(
@@ -304,10 +435,10 @@ class MainActivity : FlutterActivity() {
                 proc.putChannelMixingMatrix(ChannelMixingMatrix.create(2, 2).scaleBy(vol))
                 eb.setEffects(Effects(listOf(proc), emptyList()))
             }
-            b.addItem(eb.build())
-            cursor += (outMs - inMs)
+            lane.builder.addItem(eb.build())
+            lane.cursor += (outMs - inMs)
         }
-        return b.build()
+        return lanes.map { it.builder.build() }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -379,10 +510,15 @@ class MainActivity : FlutterActivity() {
                         // V10: نقسّم النافذة على الكلمات، span لكل كلمة مع تمييزها
                         val words = txt.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
                         if (words.isNotEmpty()) {
-                            val wordMs = (e - s).toDouble() / words.size
+                            // الوقت يتقسم حسب طول الكلمة (عدد الحروف)، موش بالتساوي:
+                            // الكلمة الطويلة تاخو وقت أكثر كيما في النطق.
+                            val weights = words.map { w -> maxOf(1, w.count { it.isLetterOrDigit() }) }
+                            val total = weights.sum().toDouble()
+                            var acc = 0
                             for (i in words.indices) {
-                                val ws = s + (i * wordMs).toLong()
-                                val we = s + ((i + 1) * wordMs).toLong()
+                                val ws = s + ((e - s) * (acc / total)).toLong()
+                                acc += weights[i]
+                                val we = if (i == words.size - 1) e else s + ((e - s) * (acc / total)).toLong()
                                 if (we <= gStart || ws >= gEnd) continue
                                 val rs = (maxOf(ws, gStart) - gStart) * 1000
                                 val re = (minOf(we, gEnd) - gStart) * 1000
@@ -425,29 +561,29 @@ class MainActivity : FlutterActivity() {
             // سلاسل الصوت (voix off + موسيقى) تتمزج فوق الفيديو
             val sequences = ArrayList<EditedMediaItemSequence>()
             sequences.add(seqBuilder.build())
-            audioSequence(audio.filter { (it["kind"] as? String) == "voice" })?.let { sequences.add(it) }
-            audioSequence(audio.filter { (it["kind"] as? String) == "music" })?.let { sequences.add(it) }
+            sequences.addAll(audioSequences(audio.filter { (it["kind"] as? String) == "voice" }))
+            sequences.addAll(audioSequences(audio.filter { (it["kind"] as? String) == "music" }))
 
             val composition = Composition.Builder(sequences).build()
             val started = SystemClock.elapsedRealtime()
-            var replied = false
             val transformer = Transformer.Builder(this)
                 .addListener(object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, r: ExportResult) {
-                        if (replied) return; replied = true
-                        result.success(mapOf(
-                            "ms" to (SystemClock.elapsedRealtime() - started),
-                            "output" to output,
-                        ))
+                        finishTracked {
+                            it.success(mapOf(
+                                "ms" to (SystemClock.elapsedRealtime() - started),
+                                "output" to output,
+                            ))
+                        }
                     }
 
                     override fun onError(c: Composition, r: ExportResult, e: ExportException) {
-                        if (replied) return; replied = true
-                        result.error("export_failed", e.message, null)
+                        File(output).delete() // ما نخلّيوش ملف نصّو
+                        finishTracked { it.error("export_failed", e.message, null) }
                     }
                 })
                 .build()
-            transformer.start(composition, output)
+            startTracked(transformer, result) { transformer.start(composition, output) }
         } catch (e: Exception) {
             result.error("export_exception", e.message, null)
         }
@@ -472,24 +608,24 @@ class MainActivity : FlutterActivity() {
                 .build()
 
             val started = SystemClock.elapsedRealtime()
-            var replied = false
             val transformer = Transformer.Builder(this)
                 .addListener(object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, r: ExportResult) {
-                        if (replied) return; replied = true
-                        result.success(mapOf(
-                            "ms" to (SystemClock.elapsedRealtime() - started),
-                            "output" to output,
-                        ))
+                        finishTracked {
+                            it.success(mapOf(
+                                "ms" to (SystemClock.elapsedRealtime() - started),
+                                "output" to output,
+                            ))
+                        }
                     }
 
                     override fun onError(c: Composition, r: ExportResult, e: ExportException) {
-                        if (replied) return; replied = true
-                        result.error("export_failed", e.message, null)
+                        File(output).delete() // ما نخلّيوش ملف نصّو
+                        finishTracked { it.error("export_failed", e.message, null) }
                     }
                 })
                 .build()
-            transformer.start(edited, output)
+            startTracked(transformer, result) { transformer.start(edited, output) }
         } catch (e: Exception) {
             result.error("export_exception", e.message, null)
         }

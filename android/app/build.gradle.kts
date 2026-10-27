@@ -16,6 +16,20 @@ if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// APK release موقّع بمفتاح debug = ما عادش تنجم تعمل mise à jour بالمفتاح الحقيقي
+// (الناس يلزمهم يفسخو الـapp). على هذاك الـbuild release يطيح كان key.properties ناقص.
+// للتجربة برك:  ALLOW_DEBUG_SIGNED_RELEASE=true flutter build apk --release
+val wantsRelease = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true) || it.contains("Bundle", ignoreCase = true)
+}
+val allowDebugRelease = System.getenv("ALLOW_DEBUG_SIGNED_RELEASE") == "true"
+if (wantsRelease && !hasReleaseKeystore && !allowDebugRelease) {
+    throw GradleException(
+        "key.properties ناقص: الـrelease لازم يتوقّع بمفتاحك. " +
+        "شوف README (Signing) ولا، للتجربة برك، حطّ ALLOW_DEBUG_SIGNED_RELEASE=true."
+    )
+}
+
 android {
     namespace = "com.bannour.tiktok_studio"
     compileSdk = flutter.compileSdkVersion
@@ -56,7 +70,7 @@ android {
 
     buildTypes {
         release {
-            // يوقّع بمفتاح الـrelease إذا key.properties موجود، وإلّا بالـdebug (باش flutter run يخدم)
+            // مفتاح الـrelease؛ الـdebug ما يتستعملش كان بـALLOW_DEBUG_SIGNED_RELEASE=true
             signingConfig = if (hasReleaseKeystore)
                 signingConfigs.getByName("release")
             else
@@ -88,4 +102,6 @@ dependencies {
     implementation("androidx.media3:media3-transformer:$media3")
     implementation("androidx.media3:media3-effect:$media3")
     implementation("androidx.media3:media3-common:$media3")
+    // FileProvider (إرسال الفيديو لـCapCut)
+    implementation("androidx.core:core-ktx:1.13.1")
 }
