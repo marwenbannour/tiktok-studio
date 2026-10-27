@@ -1,7 +1,14 @@
 package com.bannour.tiktok_studio
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.FileProvider
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
@@ -75,9 +82,70 @@ class MainActivity : FlutterActivity() {
                     "probeDuration" -> result.success(probeDuration(call.argument("path")!!))
                     "probeInfo" -> result.success(probeInfo(call.argument("path")!!))
                     "pickAudio" -> pickAudio(result)
+                    "isAppInstalled" -> result.success(isAppInstalled(call.argument("package")!!))
+                    "shareToApp" -> shareToApp(
+                        call.argument("path")!!,
+                        call.argument("package")!!,
+                        call.argument("mime") ?: "video/mp4",
+                        result)
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // ---------------------------------------------------------------- CapCut
+
+    /// التطبيق [pkg] منصّب؟ (يستحقّ <queries> في الـmanifest على Android 11+)
+    private fun isAppInstalled(pkg: String): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(pkg, 0)
+        }
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /// يبعث ملف [path] لتطبيق [pkg] (ACTION_SEND + FileProvider).
+    /// يرجّع false كان التطبيق موش منصّب ولا ما قبلش → Dart يطلّع menu المشاركة.
+    /// الملف كان موش في dossier يخدمو الـprovider، يتنسخ في cache/capcut
+    /// على thread آخر (فيديو كبير ما يجمّدش الـUI).
+    private fun shareToApp(path: String, pkg: String, mime: String, result: MethodChannel.Result) {
+        if (!isAppInstalled(pkg)) { result.success(false); return }
+        val src = File(path)
+        if (!src.exists()) { result.error("not_found", "الملف موش موجود", null); return }
+        val main = Handler(Looper.getMainLooper())
+        Thread {
+            try {
+                val uri = try {
+                    FileProvider.getUriForFile(this, "$packageName.capcut_provider", src)
+                } catch (_: IllegalArgumentException) {
+                    val dir = File(cacheDir, "capcut").apply { mkdirs() }
+                    val copy = File(dir, src.name)
+                    src.copyTo(copy, overwrite = true)
+                    FileProvider.getUriForFile(this, "$packageName.capcut_provider", copy)
+                }
+                main.post {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = mime
+                        setPackage(pkg)
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (_: ActivityNotFoundException) {
+                        result.success(false)
+                    }
+                }
+            } catch (e: Exception) {
+                main.post { result.error("share_failed", e.message, null) }
+            }
+        }.start()
     }
 
     /// مدّة ملف صوت/فيديو بالـms (MediaMetadataRetriever).
