@@ -112,6 +112,8 @@ class _CapCutScreenState extends State<CapCutScreen> {
               title: 'الترجمة والنصوص',
               subtitle: '${_subs.length} سطر ترجمة (≤ ${CapCutExport.maxChars} حرف، موقّتين بالـms)'
                   '${_titles.isEmpty ? '' : ' · ${_titles.length} نصّ على الشاشة'}',
+              footer: 'على التليفون: Texte ← Sous-titres automatiques، وصلّح الكلمات بالنصّ المنسوخ. '
+                  'على الـPC: Texte ← Importer ← captions.srt.',
               children: [
                 FilledButton.tonalIcon(
                   onPressed: _subs.isEmpty
@@ -132,8 +134,6 @@ class _CapCutScreenState extends State<CapCutScreen> {
                   label: const Text('صدّر SRT'),
                 ),
               ],
-              footer: 'على التليفون: Texte ← Sous-titres automatiques، وصلّح الكلمات بالنصّ المنسوخ. '
-                  'على الـPC: Texte ← Importer ← captions.srt.',
             ),
             if (_subs.isNotEmpty) _CuePreview(cues: _subs),
 

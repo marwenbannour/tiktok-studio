@@ -342,9 +342,9 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            OutlinedButton(
+            const OutlinedButton(
               onPressed: VideoEngine.cancelExport,
-              child: const Text('إلغاء'),
+              child: Text('إلغاء'),
             ),
           ],
         ),

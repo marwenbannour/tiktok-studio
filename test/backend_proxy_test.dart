@@ -125,7 +125,7 @@ void main() {
       await expectLater(
         http.runWithClient(() => api.ask('x'), () => mock),
         throwsA(isA<ClaudeException>()
-            .having((e) => e.message, 'message', contains('الحدّ اليومي (30'))),
+            .having((e) => e.message, 'message', contains('(30 توليد)'))),
       );
     });
 
