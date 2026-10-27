@@ -459,6 +459,27 @@ class ProjectRepo {
     await d.touchProject(projectId, durationMs: maxEnd);
   }
 
+  /// V19: يرجّع كل clips المشروع لحالة snapshot (undo/redo). يبدّل الكلّ ويحدّث المدّة.
+  static Future<void> restoreClips(int projectId, List<Clip> snapshot,
+      {AppDatabase? db}) async {
+    final d = _resolve(db);
+    final companions = snapshot
+        .map((c) => ClipsCompanion.insert(
+              projectId: projectId,
+              track: c.track,
+              sourcePath: Value(c.sourcePath),
+              startMs: c.startMs,
+              inMs: Value(c.inMs),
+              outMs: Value(c.outMs),
+              speed: Value(c.speed),
+              zOrder: Value(c.zOrder),
+              props: Value(c.props),
+            ))
+        .toList();
+    await d.replaceClips(projectId, companions);
+    await touchDuration(projectId, db: d);
+  }
+
   /// يسجّل مسار آخر export فالمشروع.
   static Future<void> markExported(int projectId, String path, {AppDatabase? db}) =>
       _resolve(db).touchProject(projectId, exportedPath: path);

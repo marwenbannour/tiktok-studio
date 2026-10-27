@@ -413,6 +413,38 @@ void main() {
     expect(text.track, 'text'); // sanity
   });
 
+  test('V19 restoreClips: snapshot يرجّع الحالة بالضبط (undo)', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 4000, db: db);
+    await ProjectRepo.setFilter(projectId: pid, clipId:
+        (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.track == 'video').id,
+        filter: 'warm', db: db);
+
+    // snapshot الحالة الحالية (فيها فيديو + فلتر + نصوص)
+    final snapshot = await ProjectRepo.clips(pid, db: db);
+    final beforeCount = snapshot.length;
+
+    // نعملو تغييرات: نزيدو فيديو ثاني + نفسخو الترجمة
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 3000, db: db);
+    expect((await ProjectRepo.clips(pid, db: db)).length, greaterThan(beforeCount));
+
+    // undo → نرجّعو الـsnapshot
+    await ProjectRepo.restoreClips(pid, snapshot, db: db);
+    final restored = await ProjectRepo.clips(pid, db: db);
+    expect(restored.length, beforeCount);
+    // الفيديو الوحيد /a.mp4 بالفلتر warm رجع
+    final vid = restored.firstWhere((c) => c.track == 'video');
+    expect(vid.sourcePath, '/a.mp4');
+    expect(ProjectRepo.filterOf(vid), 'warm');
+    expect(restored.any((c) => c.sourcePath == '/b.mp4'), isFalse);
+
+    // المدّة تعاودت تتحسب
+    final p = await ProjectRepo.byId(pid, db: db);
+    expect(p!.durationMs, greaterThan(0));
+  });
+
   test('V18 setBlur: يخزّن شدّة الطمس + يبان فالـplan', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(

@@ -42,6 +42,38 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   bool _busy = false;
   VideoPlayerController? _preview;
 
+  // V19: undo/redo — snapshots للـclips فالذاكرة (50 خطوة)
+  static const _maxUndo = 50;
+  final List<List<Clip>> _undoStack = [];
+  final List<List<Clip>> _redoStack = [];
+
+  /// يسجّل الحالة الحالية قبل أيّ تعديل (ينظّف redo).
+  void _pushUndo() {
+    _undoStack.add(List<Clip>.from(_clips));
+    if (_undoStack.length > _maxUndo) _undoStack.removeAt(0);
+    _redoStack.clear();
+  }
+
+  Future<void> _undo() async {
+    if (_undoStack.isEmpty) return;
+    _redoStack.add(List<Clip>.from(_clips));
+    final snap = _undoStack.removeLast();
+    await ProjectRepo.restoreClips(widget.projectId, snap);
+    await _preview?.dispose();
+    _preview = null;
+    await _load();
+  }
+
+  Future<void> _redo() async {
+    if (_redoStack.isEmpty) return;
+    _undoStack.add(List<Clip>.from(_clips));
+    final snap = _redoStack.removeLast();
+    await ProjectRepo.restoreClips(widget.projectId, snap);
+    await _preview?.dispose();
+    _preview = null;
+    await _load();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +129,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       } finally {
         await ctrl.dispose();
       }
+      _pushUndo();
       await ProjectRepo.addVideoClip(
           projectId: widget.projectId, sourcePath: copied, durationMs: durMs);
       await _preview?.dispose();
@@ -141,6 +174,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       await rec.dispose();
       if (out == null) return;
       final dur = await VideoEngine.probeDuration(out);
+      _pushUndo();
       await ProjectRepo.addVoiceClip(
           projectId: widget.projectId,
           sourcePath: out,
@@ -164,6 +198,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       }
       final dest = await ProjectRepo.importMedia(widget.projectId, picked);
       final dur = await VideoEngine.probeDuration(dest);
+      _pushUndo();
       await ProjectRepo.setMusic(
           projectId: widget.projectId, sourcePath: dest, durationMs: dur);
       await _load();
@@ -223,10 +258,12 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (action == 'save') {
+      _pushUndo();
       await ProjectRepo.setVolume(
           projectId: widget.projectId, clipId: clip.id, volume: vol);
       await _load();
     } else if (action == 'delete') {
+      _pushUndo();
       await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
       await _load();
     }
@@ -408,6 +445,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (saved == true) {
+      _pushUndo();
       await ProjectRepo.updateStyle(
         projectId: widget.projectId,
         clipId: clip.id,
@@ -565,6 +603,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (action == null) return; // تسكّر بلا اختيار
+    _pushUndo();
     switch (action.$1) {
       case 'trim':
         await ProjectRepo.trimVideoClip(
@@ -681,6 +720,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (applied == true) {
+      _pushUndo();
       await ProjectRepo.reorderVideoClips(
           projectId: widget.projectId,
           orderedIds: items.map((c) => c.id).toList());
@@ -716,6 +756,16 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'تراجع',
+            icon: const Icon(Icons.undo),
+            onPressed: (_busy || _undoStack.isEmpty) ? null : _undo,
+          ),
+          IconButton(
+            tooltip: 'إعادة',
+            icon: const Icon(Icons.redo),
+            onPressed: (_busy || _redoStack.isEmpty) ? null : _redo,
+          ),
           IconButton(
             tooltip: 'رتّب الفيديوهات',
             icon: const Icon(Icons.swap_vert),
