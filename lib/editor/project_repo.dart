@@ -191,23 +191,45 @@ class ProjectRepo {
     return 'none';
   }
 
-  /// V17: يحطّ فلتر لوني على clip فيديو (يكتب props['filter']، يحافظ على باقي props).
-  static Future<void> setFilter({
-    required int projectId,
-    required int clipId,
-    required String filter,
-    AppDatabase? db,
-  }) async {
-    final d = _resolve(db);
+  /// يدمج مفاتيح فـprops JSON متاع clip (يحافظ على الباقي) + autosave.
+  static Future<void> _mergeProps(
+      AppDatabase d, int projectId, int clipId, Map<String, Object?> patch) async {
     final c = (await d.projectClips(projectId)).firstWhere((x) => x.id == clipId);
     Map<String, dynamic> p = {};
     try {
       p = jsonDecode(c.props) as Map<String, dynamic>;
     } catch (_) {}
-    p['filter'] = videoFilters.contains(filter) ? filter : 'none';
+    patch.forEach((k, v) => p[k] = v);
     await d.updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(p))));
     await d.touchProject(projectId); // V20: autosave → آخر تعديل
   }
+
+  /// V17: يحطّ فلتر لوني على clip فيديو (يحافظ على باقي props).
+  static Future<void> setFilter({
+    required int projectId,
+    required int clipId,
+    required String filter,
+    AppDatabase? db,
+  }) =>
+      _mergeProps(_resolve(db), projectId, clipId,
+          {'filter': videoFilters.contains(filter) ? filter : 'none'});
+
+  /// V16: انتقالة dip-to-black على clip فيديو (fade-in/out للكحلة).
+  static bool fadeOf(Clip c) {
+    try {
+      return jsonDecode(c.props)['fade'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> setFade({
+    required int projectId,
+    required int clipId,
+    required bool fade,
+    AppDatabase? db,
+  }) =>
+      _mergeProps(_resolve(db), projectId, clipId, {'fade': fade});
 
   /// V14: يبدّل سرعة clip فيديو (0.25..4)، ويعاود يرتّب (المدّة تتبدّل).
   static Future<void> setSpeed({
@@ -268,6 +290,7 @@ class ProjectRepo {
         'speed': c.speed <= 0 ? 1.0 : c.speed,
         'timelineMs': timelineDuration(c), // المدّة على الـtimeline (بعد السرعة)
         'filter': filterOf(c), // V17: فلتر لوني
+        'fade': fadeOf(c), // V16: dip-to-black
       });
     }
 

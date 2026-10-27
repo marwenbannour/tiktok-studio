@@ -516,6 +516,20 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                     ),
                 ],
               ),
+              const Divider(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text('⇄ انتقالة dip-to-black\n(ذوبان للكحلة فالبداية/النهاية)',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                  Switch(
+                    value: ProjectRepo.fadeOf(clip),
+                    onChanged: (v) => Navigator.pop(ctx, ('fade', v ? 1 : 0)),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -537,6 +551,9 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
             projectId: widget.projectId,
             clipId: clip.id,
             filter: ProjectRepo.videoFilters[action.$2]);
+      case 'fade':
+        await ProjectRepo.setFade(
+            projectId: widget.projectId, clipId: clip.id, fade: action.$2 == 1);
       case 'delete':
         await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
         await _preview?.dispose();

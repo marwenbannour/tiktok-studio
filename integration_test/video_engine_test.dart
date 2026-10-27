@@ -84,12 +84,12 @@ void main() {
 
     final r = await VideoEngine.exportComposition(
       clips: [
-        // V14: الـclip الأوّل بسرعة 2x → 250ms؛ V17: فلتر سينمائي
+        // V14: سرعة 2x؛ V17: فلتر سينمائي؛ V16: dip-to-black
         {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': 0,
-         'speed': 2.0, 'timelineMs': half ~/ 2, 'filter': 'cinematic'},
-        // الثاني: فلتر أبيض وأسود
+         'speed': 2.0, 'timelineMs': half ~/ 2, 'filter': 'cinematic', 'fade': true},
+        // الثاني: أبيض وأسود + انتقالة
         {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half ~/ 2,
-         'speed': 1.0, 'timelineMs': half, 'filter': 'bw'},
+         'speed': 1.0, 'timelineMs': half, 'filter': 'bw', 'fade': true},
       ],
       overlays: [
         // ترجمة منسّقة (سماوي/حجم/محاذاة) تغطّي الـclip الأوّل

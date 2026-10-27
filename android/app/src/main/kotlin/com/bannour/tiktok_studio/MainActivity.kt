@@ -2,6 +2,7 @@ package com.bannour.tiktok_studio
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import java.io.File
@@ -24,6 +25,7 @@ import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.Effect
 import androidx.media3.effect.Contrast
+import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbAdjustment
@@ -127,6 +129,27 @@ class MainActivity : FlutterActivity() {
             res.success(dest.absolutePath)
         } catch (e: Exception) {
             res.error("copy_failed", e.message, null)
+        }
+    }
+
+    /// V16: overlay كحلة full-frame بـalpha متغيّر → dip-to-black
+    /// (fade-in من الكحلة فالبداية + fade-out للكحلة فالنهاية).
+    @OptIn(UnstableApi::class)
+    private class FadeBlackOverlay(
+        private val bitmap: Bitmap,
+        private val clipMs: Long,
+        private val fadeMs: Long,
+    ) : BitmapOverlay() {
+        override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
+
+        override fun getOverlaySettings(presentationTimeUs: Long): StaticOverlaySettings {
+            val ms = presentationTimeUs / 1000
+            val a = when {
+                ms < fadeMs -> 1f - ms.toFloat() / fadeMs // طالع من الكحلة
+                ms > clipMs - fadeMs -> (ms - (clipMs - fadeMs)).toFloat() / fadeMs // نازل للكحلة
+                else -> 0f
+            }.coerceIn(0f, 1f)
+            return StaticOverlaySettings.Builder().setAlphaScale(a).build()
         }
     }
 
@@ -249,6 +272,7 @@ class MainActivity : FlutterActivity() {
             if (clips.isEmpty()) {
                 result.error("no_clips", "ماكانش clips فيديو للـexport.", null); return
             }
+            var blackBitmap: Bitmap? = null // V16: يتعمل مرّة وحدة كان فمّا fade
             val seqBuilder = EditedMediaItemSequence.Builder()
             for (clip in clips) {
                 val path = clip["path"] as String
@@ -305,6 +329,15 @@ class MainActivity : FlutterActivity() {
                 val overlayList = ArrayList<TextureOverlay>()
                 if (subs.isNotEmpty()) overlayList.add(TimedTextOverlay(subs, -0.8f))
                 if (texts.isNotEmpty()) overlayList.add(TimedTextOverlay(texts, 0.8f))
+                // V16: dip-to-black — فوق الكلّ (النصّ يعتم معاه)
+                if (clip["fade"] == true) {
+                    if (blackBitmap == null) {
+                        blackBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                            .apply { eraseColor(Color.BLACK) }
+                    }
+                    val fadeMs = minOf(350L, timelineMs / 2)
+                    if (fadeMs > 0) overlayList.add(FadeBlackOverlay(blackBitmap!!, timelineMs, fadeMs))
+                }
                 if (overlayList.isNotEmpty()) {
                     effectsList.add(OverlayEffect(ImmutableList.copyOf(overlayList)))
                 }

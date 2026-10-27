@@ -365,6 +365,28 @@ void main() {
     expect(plan.clips.first['filter'], 'none');
   });
 
+  test('V16 setFade: يخزّن الانتقالة + يحافظ على الفلتر + يبان فالـplan', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 5000, db: db);
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+
+    await ProjectRepo.setFilter(projectId: pid, clipId: a.id, filter: 'warm', db: db);
+    await ProjectRepo.setFade(projectId: pid, clipId: a.id, fade: true, db: db);
+
+    final reloaded = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == a.id);
+    expect(ProjectRepo.fadeOf(reloaded), isTrue);
+    expect(ProjectRepo.filterOf(reloaded), 'warm'); // الفلتر ما ضاعش
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    expect(plan.clips.first['fade'], true);
+
+    await ProjectRepo.setFade(projectId: pid, clipId: a.id, fade: false, db: db);
+    final off = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == a.id);
+    expect(ProjectRepo.fadeOf(off), isFalse);
+  });
+
   test('V20 autosave: كل تعديل يحدّث updatedAt (تنسيق/حجم/فلتر)', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(
