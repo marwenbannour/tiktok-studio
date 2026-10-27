@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 
 import '../db/database.dart';
 import '../editor/project_repo.dart';
+import '../share_video.dart';
 import '../theme.dart';
 import '../video_engine.dart';
 
@@ -42,6 +43,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
   bool _loading = true;
   bool _busy = false;
   bool _exporting = false;
+  String? _exportedPath; // V22: آخر فيديو تصدّر (للنشر)
   VideoPlayerController? _preview;
 
   // V19: undo/redo — snapshots للـclips فالذاكرة (50 خطوة)
@@ -302,7 +304,15 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       await Gal.putVideo(r.output, album: 'TikTok Studio');
       await ProjectRepo.markExported(widget.projectId, r.output);
       if (mounted) {
-        _snack('تصدّر فالـgalerie ✅ (${(r.ms / 1000).toStringAsFixed(1)}s)');
+        setState(() => _exportedPath = r.output);
+        // snackbar مع زرّ نشر مباشر
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('تصدّر فالـgalerie ✅ (${(r.ms / 1000).toStringAsFixed(1)}s)'),
+            action: SnackBarAction(label: 'انشر 📤', onPressed: _shareExport),
+            duration: const Duration(seconds: 6),
+          ));
       }
     } catch (e) {
       if (!mounted) return;
@@ -319,6 +329,24 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
           _exporting = false;
         });
       }
+    }
+  }
+
+  /// V22: ينشر آخر فيديو تصدّر — مباشر لـTikTok كان منصّب، وإلّا قائمة المشاركة.
+  Future<void> _shareExport() async {
+    final path = _exportedPath;
+    if (path == null) return;
+    if (!await File(path).exists()) {
+      _snack('ملف الـexport ماعادش موجود. صدّر من جديد.');
+      return;
+    }
+    try {
+      final opened = await ShareVideo.toTikTok(path, subject: _project?.title);
+      if (mounted && !opened) {
+        _snack('اختار TikTok من القائمة باش تنشر.');
+      }
+    } catch (e) {
+      if (mounted) _snack('ما نجّمناش نشاركو: $e');
     }
   }
 
@@ -872,16 +900,30 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                 padding: const EdgeInsets.all(12),
                 child: _exporting
                     ? _exportBar()
-                    : FilledButton.icon(
-                        onPressed: _busy ? null : _export,
-                        icon: _busy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.movie_filter_outlined),
-                        label: const Text('صدّر MP4'),
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _busy ? null : _export,
+                              icon: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.movie_filter_outlined),
+                              label: const Text('صدّر MP4'),
+                            ),
+                          ),
+                          if (_exportedPath != null) ...[
+                            const SizedBox(width: 10),
+                            FilledButton.tonalIcon(
+                              onPressed: _busy ? null : _shareExport,
+                              icon: const Icon(Icons.share_outlined),
+                              label: const Text('انشر'),
+                            ),
+                          ],
+                        ],
                       ),
               ),
             ),

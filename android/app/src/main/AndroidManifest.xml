@@ -70,8 +70,10 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
-        <!-- CapCut: باش نعرفو إذا منصّب (Android 11+) -->
+        <!-- CapCut + TikTok: باش نعرفو إذا منصّبين وننشرو ليهم (Android 11+) -->
         <package android:name="com.lemon.lvoverseas"/>
+        <package android:name="com.zhiliaoapp.musically"/>
+        <package android:name="com.ss.android.ugc.trill"/>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
