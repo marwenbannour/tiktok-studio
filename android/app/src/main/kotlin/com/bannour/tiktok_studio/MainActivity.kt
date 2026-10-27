@@ -209,6 +209,35 @@ class MainActivity : FlutterActivity() {
         return s
     }
 
+    /// V10: span كاريوكي — نفس النصّ، الكلمة [hl] ملوّنة (accent) والباقي أبيض.
+    private fun karaokeSpan(ov: Map<String, Any>, words: List<String>, hl: Int): SpannableString {
+        val full = words.joinToString(" ")
+        val s = SpannableString(full)
+        val n = full.length
+        if (n == 0) return s
+        val base = try {
+            val c = ov["color"]; if (c is String && c.isNotBlank()) Color.parseColor(c) else Color.WHITE
+        } catch (_: Exception) { Color.WHITE }
+        val accent = Color.parseColor("#00E5FF")
+        val size = (ov["size"] as? Number)?.toInt() ?: 48
+        val bold = (ov["bold"] as? Boolean) ?: true
+        s.setSpan(AbsoluteSizeSpan(size, false), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        if (bold) s.setSpan(StyleSpan(Typeface.BOLD), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        s.setSpan(AlignmentSpan.Standard(Layout.Alignment.ALIGN_CENTER), 0, n,
+            Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        s.setSpan(ForegroundColorSpan(base), 0, n, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+        var off = 0
+        for (i in words.indices) {
+            val len = words[i].length
+            if (i == hl && len > 0) {
+                s.setSpan(ForegroundColorSpan(accent), off, off + len,
+                    Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+            }
+            off += len + 1 // + مسافة
+        }
+        return s
+    }
+
     /// V17: فلتر لوني → قائمة effects (RGB matrix). النصّ يتزاد بعدها فما يتأثّرش.
     @OptIn(UnstableApi::class)
     private fun filterEffects(name: String?): List<Effect> = when (name) {
@@ -319,11 +348,30 @@ class MainActivity : FlutterActivity() {
                     val s = (ov["startMs"] as Number).toLong()
                     val e = (ov["endMs"] as Number).toLong()
                     if (e <= gStart || s >= gEnd) continue // ما يتقاطعش مع الـclip
-                    val relStartUs = (maxOf(s, gStart) - gStart) * 1000
-                    val relEndUs = (minOf(e, gEnd) - gStart) * 1000
                     val txt = (ov["text"] as? String) ?: ""
                     if (txt.isBlank()) continue
                     val isText = (ov["kind"] as? String) == "text"
+                    val karaoke = ov["karaoke"] == true && !isText
+
+                    if (karaoke) {
+                        // V10: نقسّم النافذة على الكلمات، span لكل كلمة مع تمييزها
+                        val words = txt.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                        if (words.isNotEmpty()) {
+                            val wordMs = (e - s).toDouble() / words.size
+                            for (i in words.indices) {
+                                val ws = s + (i * wordMs).toLong()
+                                val we = s + ((i + 1) * wordMs).toLong()
+                                if (we <= gStart || ws >= gEnd) continue
+                                val rs = (maxOf(ws, gStart) - gStart) * 1000
+                                val re = (minOf(we, gEnd) - gStart) * 1000
+                                subs.add(TextEvent(karaokeSpan(ov, words, i), rs, re))
+                            }
+                        }
+                        continue
+                    }
+
+                    val relStartUs = (maxOf(s, gStart) - gStart) * 1000
+                    val relEndUs = (minOf(e, gEnd) - gStart) * 1000
                     // نصّ incrusté: أصفر كبير فوق؛ ترجمة: أبيض أصغر تحت
                     val span = styledSpan(ov,
                         if (isText) Color.parseColor("#FFEB3B") else Color.WHITE,

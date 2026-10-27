@@ -279,6 +279,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
     var size = (style['size'] as int).toDouble();
     var align = style['align'] as String;
     var bold = style['bold'] as bool;
+    var karaoke = style['karaoke'] as bool;
     final isText = clip.track == 'text';
 
     final saved = await showModalBottomSheet<bool>(
@@ -381,6 +382,19 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                   ]),
                 ],
               ),
+              if (!isText) // V10: الكاريوكي للترجمة برك
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text('🎤 كاريوكي (تمييز الكلمة أثناء النطق)',
+                          style: TextStyle(fontSize: 13)),
+                    ),
+                    Switch(
+                        value: karaoke,
+                        onChanged: (v) => setSheet(() => karaoke = v)),
+                  ],
+                ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -404,6 +418,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
           'bold': bold,
           'align': align,
           if (style['bg'] != null) 'bg': style['bg'],
+          if (!isText) 'karaoke': karaoke,
         },
       );
       await _load();

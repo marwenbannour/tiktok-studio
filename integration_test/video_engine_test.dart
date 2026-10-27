@@ -92,10 +92,10 @@ void main() {
          'speed': 1.0, 'timelineMs': half, 'filter': 'bw', 'fade': true, 'blur': 12.0},
       ],
       overlays: [
-        // ترجمة منسّقة (سماوي/حجم/محاذاة) تغطّي الـclip الأوّل
-        {'text': 'ترجمة ١', 'startMs': 0, 'endMs': half, 'kind': 'subtitle',
-         'color': '#00E5FF', 'size': 52, 'bold': true, 'align': 'center',
-         'bg': '#99000000'},
+        // ترجمة كاريوكي (V10): الكلمات تتقسّم وتتميّز وحدة وحدة
+        {'text': 'واحد زوز ثلاثة', 'startMs': 0, 'endMs': half, 'kind': 'subtitle',
+         'color': '#FFFFFF', 'size': 52, 'bold': true, 'align': 'center',
+         'bg': '#99000000', 'karaoke': true},
         // نصّ أصفر يعبر الحدّ بين الزوز clips
         {'text': 'نصّ يعبر', 'startMs': 200, 'endMs': half + 200, 'kind': 'text',
          'color': '#FFEB3B', 'size': 64, 'bold': true, 'align': 'right'},

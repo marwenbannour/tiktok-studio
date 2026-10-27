@@ -387,6 +387,32 @@ void main() {
     expect(ProjectRepo.fadeOf(off), isFalse);
   });
 
+  test('V10 karaoke: علم الترجمة فالـstyle + يبان فالـoverlays', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    final sub = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.track == 'subtitle' && c.startMs == 0);
+    final text = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.track == 'text');
+
+    // افتراضي مطفي
+    expect(ProjectRepo.styleOf(sub)['karaoke'], false);
+
+    await ProjectRepo.updateStyle(projectId: pid, clipId: sub.id, style: {
+      'text': 'كتبت function بسيطة',
+      'karaoke': true,
+    }, db: db);
+    expect(ProjectRepo.styleOf(
+            (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == sub.id))['karaoke'],
+        true);
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    final ovSub = plan.overlays.firstWhere((o) => o['kind'] == 'subtitle' && o['startMs'] == 0);
+    expect(ovSub['karaoke'], true);
+    // النصّ (incrusté) ما ياخذش كاريوكي حتى لو
+    final ovText = plan.overlays.firstWhere((o) => o['kind'] == 'text');
+    expect(ovText['karaoke'], false);
+    expect(text.track, 'text'); // sanity
+  });
+
   test('V18 setBlur: يخزّن شدّة الطمس + يبان فالـplan', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(

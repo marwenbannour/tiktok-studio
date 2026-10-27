@@ -329,6 +329,7 @@ class ProjectRepo {
         'bold': style['bold'] as Object,
         'align': style['align'] as Object,
         if (style['bg'] != null) 'bg': style['bg'] as Object,
+        'karaoke': (c.track == 'subtitle' && (style['karaoke'] == true)), // V10
       });
     }
 
@@ -371,6 +372,7 @@ class ProjectRepo {
       'bold': (p['bold'] as bool?) ?? true,
       'align': (p['align'] as String?) ?? 'center',
       'bg': p['bg'] as String?, // null = بلا خلفية
+      'karaoke': (p['karaoke'] as bool?) ?? false, // V10: ترجمة karaoke
     };
   }
 
