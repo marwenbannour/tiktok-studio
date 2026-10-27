@@ -66,6 +66,26 @@ flutter test test/                # unit tests
 flutter test integration_test/app_e2e_test.dart -d <device>   # e2e
 ```
 
+### 🔐 التوقيع (Signing)
+
+الـrelease **يطيح** كان `android/key.properties` ناقص، باش ما توزّعش APK موقّع بمفتاح debug
+(ساعتها ما عادش تنجم تعمل mise à jour). اعمل المفتاح مرّة وحدة وخبّيه (backup!):
+
+```
+keytool -genkey -v -keystore ~/tiktok-studio.jks -keyalg RSA -keysize 2048 -validity 10000 -alias studio
+```
+
+`android/key.properties` (ما يتبعثش لـgit):
+
+```
+storePassword=...
+keyPassword=...
+keyAlias=studio
+storeFile=/home/<toi>/tiktok-studio.jks
+```
+
+للتجربة برك (APK ما يتوزّعش): `ALLOW_DEBUG_SIGNED_RELEASE=true flutter build apk --release`
+
 **البنية:**
 ```
 lib/main.dart                 ← الـapp + الـbottom bar + شاشة الإطلاق

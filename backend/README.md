@@ -134,3 +134,29 @@ curl -i -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/generate" \
 
 - مزامنة تلقائية (كل توليد يترفع).
 - حدّ شهري من جهة السيرفر (جدول عدّاد لكل مستخدم).
+
+---
+
+## 🔐 الحماية (نسخة 2)
+
+الـfunction تقبل زوز أنواع طلبات:
+
+| شكون | Header | الحدّ في 24 ساعة |
+| --- | --- | --- |
+| مستعمل عندو حساب (الـapp) | `Authorization: Bearer <access_token>` | `DAILY_LIMIT` (افتراضي 30) |
+| صاحب المشروع (الداشبورد، التجارب) | `x-app-token: <APP_TOKEN>` | `OWNER_DAILY_LIMIT` (افتراضي 200) |
+
+- الـtoken متاع الحساب يتثبّت عند Supabase Auth (`/auth/v1/user`)؛ الـanon key وحدو ما يكفيش.
+- الموديلات المسموحة برك تتعدّى (`ALLOWED_MODELS`، مفصولة بفاصلة؛ افتراضياً نفس liste الـapp).
+- الـprompt محدود بـ20 000 حرف، و`num_predict` بـ4 000.
+- كل طلب يتسجّل في `usage_log` مع `user_id` (ولا `source = owner`).
+
+```bash
+supabase db push                                  # migration usage_log.user_id
+supabase secrets set DAILY_LIMIT=30 OWNER_DAILY_LIMIT=200
+supabase secrets set ALLOWED_MODELS="gemma4:31b,gpt-oss:20b"   # اختياري
+supabase functions deploy generate --no-verify-jwt
+```
+
+`--no-verify-jwt` مقصود: الثبوت من الـJWT يصير في الكود (باش `x-app-token` يقعد يخدم للداشبورد).
+كان ما تحتاجش وضع صاحب المشروع، ما تحطّش `APP_TOKEN` أصلاً والـfunction تقبل الحسابات برك.

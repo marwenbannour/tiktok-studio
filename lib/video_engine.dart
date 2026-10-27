@@ -1,9 +1,41 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// واجهة محرّك الفيديو (Lot 2) — خلف platform channel (Media3 Transformer).
 /// prototype: export فيديو مع نصّ محروق + قياس المدّة.
 class VideoEngine {
   static const _ch = MethodChannel('studio/video_engine');
+
+  /// تقدّم الـexport الجاري (0.0–1.0)، null كان ما فمّا حتى export.
+  static final ValueNotifier<double?> progress = ValueNotifier<double?>(null);
+  static bool _listening = false;
+
+  static void _listen() {
+    if (_listening) return;
+    _listening = true;
+    _ch.setMethodCallHandler((call) async {
+      if (call.method == 'exportProgress') {
+        final p = call.arguments;
+        if (p is num) progress.value = (p / 100).clamp(0.0, 1.0).toDouble();
+      }
+    });
+  }
+
+  /// يلغي الـexport الجاري (الـFuture متاعو يطيح بـPlatformException 'cancelled').
+  static Future<void> cancelExport() => _ch.invokeMethod<void>('cancelExport');
+
+  /// الخطأ هذا جا من إلغاء المستعمل؟
+  static bool isCancelled(Object e) => e is PlatformException && e.code == 'cancelled';
+
+  static Future<Map<String, dynamic>?> _tracked(String method, Map<String, Object> args) async {
+    _listen();
+    progress.value = 0;
+    try {
+      return await _ch.invokeMapMethod<String, dynamic>(method, args);
+    } finally {
+      progress.value = null;
+    }
+  }
 
   /// export [input] لـ[output] (MP4)، مع [text] محروق اختياري، بأبعاد [width]×[height].
   /// يرجّع مدّة الـexport بالـms ومسار المخرج.
@@ -14,7 +46,7 @@ class VideoEngine {
     int width = 1080,
     int height = 1920,
   }) async {
-    final r = await _ch.invokeMapMethod<String, dynamic>('export', {
+    final r = await _tracked('export', {
       'input': input,
       'output': output,
       'text': text,
@@ -40,7 +72,7 @@ class VideoEngine {
     int width = 1080,
     int height = 1920,
   }) async {
-    final r = await _ch.invokeMapMethod<String, dynamic>('exportComposition', {
+    final r = await _tracked('exportComposition', {
       'clips': clips,
       'overlays': overlays,
       'audio': audio,

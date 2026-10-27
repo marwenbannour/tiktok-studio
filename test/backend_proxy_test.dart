@@ -75,4 +75,64 @@ void main() {
       throwsA(isA<ClaudeException>()),
     );
   });
+
+  group('وضع backend بالحساب (JWT)', () {
+    http.Response jsonRes(Object body, int code) => http.Response(jsonEncode(body), code,
+        headers: {'content-type': 'application/json'});
+
+    test('يبعث Bearer متاع الحساب، وما يبعثش x-app-token', () async {
+      late http.Request captured;
+      final mock = MockClient((req) async {
+        captured = req;
+        return ok('أهلا');
+      });
+      final api = ClaudeApi(
+        apiKey: '',
+        model: 'gemma4:31b',
+        backendUrl: 'https://x/generate',
+        appToken: 'owner',
+        sessionToken: () async => 'jwt-1',
+      );
+      final r = await http.runWithClient(() => api.ask('مرحبا'), () => mock);
+      expect(r, 'أهلا');
+      expect(captured.headers['authorization'], 'Bearer jwt-1');
+      expect(captured.headers.containsKey('x-app-token'), isFalse);
+    });
+
+    test('401 → refresh مرّة وحدة ويعاود', () async {
+      final seen = <String?>[];
+      final mock = MockClient((req) async {
+        seen.add(req.headers['authorization']);
+        return seen.length == 1 ? jsonRes({'error': 'unauthorized'}, 401) : ok('تمّ');
+      });
+      final api = ClaudeApi(
+        apiKey: '',
+        model: 'm',
+        backendUrl: 'https://x',
+        sessionToken: () async => 'old',
+        refreshToken: () async => 'new',
+      );
+      final r = await http.runWithClient(() => api.ask('x'), () => mock);
+      expect(r, 'تمّ');
+      expect(seen, ['Bearer old', 'Bearer new']);
+    });
+
+    test('الحدّ اليومي → رسالة واضحة فيها الحدّ', () async {
+      final mock =
+          MockClient((_) async => jsonRes({'error': 'daily limit reached', 'limit': 30}, 429));
+      final api = ClaudeApi(
+          apiKey: '', model: 'm', backendUrl: 'https://x', sessionToken: () async => 't');
+      await expectLater(
+        http.runWithClient(() => api.ask('x'), () => mock),
+        throwsA(isA<ClaudeException>()
+            .having((e) => e.message, 'message', contains('الحدّ اليومي (30'))),
+      );
+    });
+
+    test('بلا حساب وبلا app token → يطلب الدخول', () async {
+      final api = ClaudeApi(
+          apiKey: '', model: 'm', backendUrl: 'https://x', sessionToken: () async => null);
+      await expectLater(api.ask('x'), throwsA(isA<ClaudeException>()));
+    });
+  });
 }
