@@ -250,7 +250,7 @@ void main() {
     final sub = (await ProjectRepo.clips(pid, db: db))
         .firstWhere((c) => c.track == 'subtitle' && c.startMs == 0);
 
-    await ProjectRepo.updateStyle(sub.id, {
+    await ProjectRepo.updateStyle(projectId: pid, clipId: sub.id, style: {
       'text': 'ترجمة محرّرة',
       'color': '#00E5FF',
       'size': 72,
@@ -363,6 +363,38 @@ void main() {
     // يبان فالـexport plan
     final plan = await ProjectRepo.buildExportPlan(pid, db: db);
     expect(plan.clips.first['filter'], 'none');
+  });
+
+  test('V20 autosave: كل تعديل يحدّث updatedAt (تنسيق/حجم/فلتر)', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 5000, db: db);
+    final clips = await ProjectRepo.clips(pid, db: db);
+    final vid = clips.firstWhere((c) => c.track == 'video');
+    final sub = clips.firstWhere((c) => c.track == 'subtitle');
+
+    Future<int> updatedAt() async => (await ProjectRepo.byId(pid, db: db))!.updatedAt;
+    // نجبر updatedAt لقيمة قديمة باش نتأكّدو إنّو يتبدّل
+    await db.touchProject(pid); // baseline
+    final t0 = await updatedAt();
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+
+    await ProjectRepo.updateStyle(
+        projectId: pid, clipId: sub.id, style: {'text': 'x', 'color': '#FFFFFF'}, db: db);
+    expect(await updatedAt(), greaterThanOrEqualTo(t0));
+    final t1 = await updatedAt();
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+
+    await ProjectRepo.setFilter(projectId: pid, clipId: vid.id, filter: 'warm', db: db);
+    expect(await updatedAt(), greaterThanOrEqualTo(t1));
+    final t2 = await updatedAt();
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+
+    await ProjectRepo.setMusic(
+        projectId: pid, sourcePath: '/m.mp3', durationMs: 4000, db: db);
+    final m = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.track == 'music');
+    await ProjectRepo.setVolume(projectId: pid, clipId: m.id, volume: 0.5, db: db);
+    expect(await updatedAt(), greaterThanOrEqualTo(t2));
   });
 
   test('buildExportPlan: يمرّر audio (voice كامل + music منخفّض)', () async {

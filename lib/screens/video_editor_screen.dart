@@ -223,7 +223,8 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (action == 'save') {
-      await ProjectRepo.setVolume(clip.id, vol);
+      await ProjectRepo.setVolume(
+          projectId: widget.projectId, clipId: clip.id, volume: vol);
       await _load();
     } else if (action == 'delete') {
       await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
@@ -393,14 +394,18 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       ),
     );
     if (saved == true) {
-      await ProjectRepo.updateStyle(clip.id, {
-        'text': ctrl.text,
-        'color': color,
-        'size': size.round(),
-        'bold': bold,
-        'align': align,
-        if (style['bg'] != null) 'bg': style['bg'],
-      });
+      await ProjectRepo.updateStyle(
+        projectId: widget.projectId,
+        clipId: clip.id,
+        style: {
+          'text': ctrl.text,
+          'color': color,
+          'size': size.round(),
+          'bold': bold,
+          'align': align,
+          if (style['bg'] != null) 'bg': style['bg'],
+        },
+      );
       await _load();
     }
     ctrl.dispose();
@@ -642,7 +647,16 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(p?.title ?? 'محرّر الفيديو', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(p?.title ?? 'محرّر الفيديو',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            const Text('✓ محفوظ تلقائيًا',
+                style: TextStyle(fontSize: 11, color: AppColors.textMid)),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'رتّب الفيديوهات',

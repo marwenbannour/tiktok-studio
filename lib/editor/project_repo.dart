@@ -206,6 +206,7 @@ class ProjectRepo {
     } catch (_) {}
     p['filter'] = videoFilters.contains(filter) ? filter : 'none';
     await d.updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(p))));
+    await d.touchProject(projectId); // V20: autosave → آخر تعديل
   }
 
   /// V14: يبدّل سرعة clip فيديو (0.25..4)، ويعاود يرتّب (المدّة تتبدّل).
@@ -331,14 +332,19 @@ class ProjectRepo {
   }
 
   /// يحدّث تنسيق/نصّ clip (يكتب props JSON).
-  static Future<void> updateStyle(int clipId, Map<String, Object?> style,
-      {AppDatabase? db}) async {
+  static Future<void> updateStyle({
+    required int projectId,
+    required int clipId,
+    required Map<String, Object?> style,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
     final clean = <String, Object?>{};
     style.forEach((k, v) {
       if (v != null) clean[k] = v;
     });
-    await _resolve(db)
-        .updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(clean))));
+    await d.updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(clean))));
+    await d.touchProject(projectId); // V20: autosave
   }
 
   /// V11: يزيد clip voix off — يُلحَق ورا آخر تسجيل صوت (متسلسل).
@@ -386,9 +392,16 @@ class ProjectRepo {
   }
 
   /// يحدّث حجم صوت clip (voix off / موسيقى).
-  static Future<void> setVolume(int clipId, double volume, {AppDatabase? db}) =>
-      _resolve(db)
-          .updateClip(clipId, ClipsCompanion(props: Value(jsonEncode({'volume': volume}))));
+  static Future<void> setVolume({
+    required int projectId,
+    required int clipId,
+    required double volume,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    await d.updateClip(clipId, ClipsCompanion(props: Value(jsonEncode({'volume': volume}))));
+    await d.touchProject(projectId); // V20: autosave
+  }
 
   /// يعيد حساب مدّة المشروع من أقصى نهاية clip.
   static Future<void> touchDuration(int projectId, {AppDatabase? db}) async {
