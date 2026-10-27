@@ -231,6 +231,25 @@ class ProjectRepo {
   }) =>
       _mergeProps(_resolve(db), projectId, clipId, {'fade': fade});
 
+  /// V18: شدّة الطمس (Gaussian blur sigma) لـclip فيديو. 0 = بلا طمس.
+  static const blurPresets = [0.0, 5.0, 12.0, 20.0]; // بلا/خفيف/متوسّط/قوي
+
+  static double blurOf(Clip c) {
+    try {
+      final b = jsonDecode(c.props)['blur'];
+      if (b is num && b > 0) return b.toDouble();
+    } catch (_) {}
+    return 0.0;
+  }
+
+  static Future<void> setBlur({
+    required int projectId,
+    required int clipId,
+    required double blur,
+    AppDatabase? db,
+  }) =>
+      _mergeProps(_resolve(db), projectId, clipId, {'blur': blur < 0 ? 0.0 : blur});
+
   /// V14: يبدّل سرعة clip فيديو (0.25..4)، ويعاود يرتّب (المدّة تتبدّل).
   static Future<void> setSpeed({
     required int projectId,
@@ -291,6 +310,7 @@ class ProjectRepo {
         'timelineMs': timelineDuration(c), // المدّة على الـtimeline (بعد السرعة)
         'filter': filterOf(c), // V17: فلتر لوني
         'fade': fadeOf(c), // V16: dip-to-black
+        'blur': blurOf(c), // V18: شدّة الطمس
       });
     }
 

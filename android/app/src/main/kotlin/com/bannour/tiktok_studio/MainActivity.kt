@@ -26,6 +26,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.Effect
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.GaussianBlur
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbAdjustment
@@ -306,6 +307,10 @@ class MainActivity : FlutterActivity() {
 
                 // V17: الفلتر اللوني (قبل النصّ باش النصّ ما يتفلترش)
                 effectsList.addAll(filterEffects(clip["filter"] as? String))
+
+                // V18: الطمس (Gaussian blur) — قبل النصّ باش النصّ يبقى واضح
+                val blur = (clip["blur"] as? Number)?.toFloat() ?: 0f
+                if (blur > 0f) effectsList.add(GaussianBlur(blur))
 
                 // نحوّلو النصوص للتوقيت النسبي متاع هذا الـclip (تقاطع مع نافذتو)
                 val subs = ArrayList<TextEvent>()

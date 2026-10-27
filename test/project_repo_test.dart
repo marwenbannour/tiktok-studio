@@ -387,6 +387,24 @@ void main() {
     expect(ProjectRepo.fadeOf(off), isFalse);
   });
 
+  test('V18 setBlur: يخزّن شدّة الطمس + يبان فالـplan', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 5000, db: db);
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+    expect(ProjectRepo.blurOf(a), 0.0); // افتراضي بلا طمس
+
+    await ProjectRepo.setFade(projectId: pid, clipId: a.id, fade: true, db: db);
+    await ProjectRepo.setBlur(projectId: pid, clipId: a.id, blur: 12.0, db: db);
+    final reloaded = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == a.id);
+    expect(ProjectRepo.blurOf(reloaded), 12.0);
+    expect(ProjectRepo.fadeOf(reloaded), isTrue); // ما ضاعش
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    expect(plan.clips.first['blur'], 12.0);
+  });
+
   test('V20 autosave: كل تعديل يحدّث updatedAt (تنسيق/حجم/فلتر)', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(

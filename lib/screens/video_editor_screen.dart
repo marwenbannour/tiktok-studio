@@ -517,6 +517,20 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                 ],
               ),
               const Divider(height: 28),
+              const Text('🌫️ طمس (blur)'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (var i = 0; i < ProjectRepo.blurPresets.length; i++)
+                    ChoiceChip(
+                      label: Text(_blurLabel(i)),
+                      selected: ProjectRepo.blurOf(clip) == ProjectRepo.blurPresets[i],
+                      onSelected: (_) => Navigator.pop(ctx, ('blur', i)),
+                    ),
+                ],
+              ),
+              const Divider(height: 28),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -554,6 +568,11 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       case 'fade':
         await ProjectRepo.setFade(
             projectId: widget.projectId, clipId: clip.id, fade: action.$2 == 1);
+      case 'blur':
+        await ProjectRepo.setBlur(
+            projectId: widget.projectId,
+            clipId: clip.id,
+            blur: ProjectRepo.blurPresets[action.$2]);
       case 'delete':
         await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
         await _preview?.dispose();
@@ -567,6 +586,13 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
     final str = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
     return '${str}x';
   }
+
+  String _blurLabel(int i) => switch (i) {
+        1 => 'خفيف',
+        2 => 'متوسّط',
+        3 => 'قوي',
+        _ => 'بلا',
+      };
 
   String _filterLabel(String f) => switch (f) {
         'warm' => 'دافئ',

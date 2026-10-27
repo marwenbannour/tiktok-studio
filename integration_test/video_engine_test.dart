@@ -87,9 +87,9 @@ void main() {
         // V14: سرعة 2x؛ V17: فلتر سينمائي؛ V16: dip-to-black
         {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': 0,
          'speed': 2.0, 'timelineMs': half ~/ 2, 'filter': 'cinematic', 'fade': true},
-        // الثاني: أبيض وأسود + انتقالة
+        // الثاني: أبيض وأسود + انتقالة + طمس (V18)
         {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half ~/ 2,
-         'speed': 1.0, 'timelineMs': half, 'filter': 'bw', 'fade': true},
+         'speed': 1.0, 'timelineMs': half, 'filter': 'bw', 'fade': true, 'blur': 12.0},
       ],
       overlays: [
         // ترجمة منسّقة (سماوي/حجم/محاذاة) تغطّي الـclip الأوّل
