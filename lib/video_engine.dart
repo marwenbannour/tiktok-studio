@@ -60,6 +60,12 @@ class VideoEngine {
     return ms ?? 0;
   }
 
+  /// معلومات فيديو: {width, height, durationMs, hasAudio, hasVideo}.
+  static Future<Map<String, dynamic>> probeInfo(String path) async {
+    final r = await _ch.invokeMapMethod<String, dynamic>('probeInfo', {'path': path});
+    return r ?? {};
+  }
+
   /// V12: يفتح منتقي صوت النظام؛ يرجّع مسار نسخة مؤقّتة، ولا null إذا ألغى.
   static Future<String?> pickAudio() =>
       _ch.invokeMethod<String>('pickAudio');

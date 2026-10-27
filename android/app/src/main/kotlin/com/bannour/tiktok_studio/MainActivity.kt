@@ -73,6 +73,7 @@ class MainActivity : FlutterActivity() {
                         call.argument("height") ?: 1920,
                         result)
                     "probeDuration" -> result.success(probeDuration(call.argument("path")!!))
+                    "probeInfo" -> result.success(probeInfo(call.argument("path")!!))
                     "pickAudio" -> pickAudio(result)
                     else -> result.notImplemented()
                 }
@@ -87,6 +88,27 @@ class MainActivity : FlutterActivity() {
             r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
         } catch (_: Exception) {
             0L
+        } finally {
+            try { r.release() } catch (_: Exception) {}
+        }
+    }
+
+    /// معلومات ملف فيديو: أبعاد + مدّة + فمّا صوت/فيديو (للتحقّق end-to-end).
+    private fun probeInfo(path: String): Map<String, Any> {
+        val r = MediaMetadataRetriever()
+        return try {
+            r.setDataSource(path)
+            fun meta(k: Int) = r.extractMetadata(k)
+            mapOf(
+                "width" to (meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0),
+                "height" to (meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0),
+                "durationMs" to (meta(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L),
+                "rotation" to (meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0),
+                "hasAudio" to (meta(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"),
+                "hasVideo" to (meta(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"),
+            )
+        } catch (e: Exception) {
+            mapOf("error" to (e.message ?: "probe failed"))
         } finally {
             try { r.release() } catch (_: Exception) {}
         }
