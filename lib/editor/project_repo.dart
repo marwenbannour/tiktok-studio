@@ -179,6 +179,35 @@ class ProjectRepo {
     await _resequenceVideo(projectId, d);
   }
 
+  /// V17: الفلاتر اللونية المتوفّرة (الاسم التقني → يتبعث للمحرّك).
+  static const videoFilters = ['none', 'warm', 'cool', 'cinematic', 'bw'];
+
+  /// فلتر clip فيديو (props['filter'])، افتراضي 'none'.
+  static String filterOf(Clip c) {
+    try {
+      final f = jsonDecode(c.props)['filter'];
+      if (f is String && videoFilters.contains(f)) return f;
+    } catch (_) {}
+    return 'none';
+  }
+
+  /// V17: يحطّ فلتر لوني على clip فيديو (يكتب props['filter']، يحافظ على باقي props).
+  static Future<void> setFilter({
+    required int projectId,
+    required int clipId,
+    required String filter,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final c = (await d.projectClips(projectId)).firstWhere((x) => x.id == clipId);
+    Map<String, dynamic> p = {};
+    try {
+      p = jsonDecode(c.props) as Map<String, dynamic>;
+    } catch (_) {}
+    p['filter'] = videoFilters.contains(filter) ? filter : 'none';
+    await d.updateClip(clipId, ClipsCompanion(props: Value(jsonEncode(p))));
+  }
+
   /// V14: يبدّل سرعة clip فيديو (0.25..4)، ويعاود يرتّب (المدّة تتبدّل).
   static Future<void> setSpeed({
     required int projectId,
@@ -237,6 +266,7 @@ class ProjectRepo {
         'startMs': c.startMs,
         'speed': c.speed <= 0 ? 1.0 : c.speed,
         'timelineMs': timelineDuration(c), // المدّة على الـtimeline (بعد السرعة)
+        'filter': filterOf(c), // V17: فلتر لوني
       });
     }
 

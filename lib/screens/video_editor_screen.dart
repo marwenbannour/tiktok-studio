@@ -497,6 +497,20 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                     ),
                 ],
               ),
+              const Divider(height: 28),
+              const Text('🎨 فلتر لوني'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (var i = 0; i < ProjectRepo.videoFilters.length; i++)
+                    ChoiceChip(
+                      label: Text(_filterLabel(ProjectRepo.videoFilters[i])),
+                      selected: ProjectRepo.filterOf(clip) == ProjectRepo.videoFilters[i],
+                      onSelected: (_) => Navigator.pop(ctx, ('filter', i)),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -513,6 +527,11 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       case 'speed':
         await ProjectRepo.setSpeed(
             projectId: widget.projectId, clipId: clip.id, speed: action.$2 / 100);
+      case 'filter':
+        await ProjectRepo.setFilter(
+            projectId: widget.projectId,
+            clipId: clip.id,
+            filter: ProjectRepo.videoFilters[action.$2]);
       case 'delete':
         await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
         await _preview?.dispose();
@@ -526,6 +545,14 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
     final str = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
     return '${str}x';
   }
+
+  String _filterLabel(String f) => switch (f) {
+        'warm' => 'دافئ',
+        'cool' => 'بارد',
+        'cinematic' => 'سينمائي',
+        'bw' => 'أبيض وأسود',
+        _ => 'بلا',
+      };
 
   /// V05: رتّب clips الفيديو بالسحب (ReorderableListView).
   Future<void> _reorderClips() async {

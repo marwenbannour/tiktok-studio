@@ -22,8 +22,12 @@ import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.Effect
+import androidx.media3.effect.Contrast
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.RgbAdjustment
+import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
@@ -181,6 +185,21 @@ class MainActivity : FlutterActivity() {
         return s
     }
 
+    /// V17: فلتر لوني → قائمة effects (RGB matrix). النصّ يتزاد بعدها فما يتأثّرش.
+    @OptIn(UnstableApi::class)
+    private fun filterEffects(name: String?): List<Effect> = when (name) {
+        "bw" -> listOf(RgbFilter.createGrayscaleFilter())
+        "warm" -> listOf(
+            RgbAdjustment.Builder().setRedScale(1.18f).setBlueScale(0.85f).build())
+        "cool" -> listOf(
+            RgbAdjustment.Builder().setRedScale(0.85f).setBlueScale(1.18f).build())
+        "cinematic" -> listOf(
+            Contrast(0.25f),
+            RgbAdjustment.Builder().setRedScale(1.08f).setGreenScale(0.98f)
+                .setBlueScale(1.06f).build())
+        else -> emptyList()
+    }
+
     /// يبني سلسلة صوت (voix off / موسيقى): كل clip فبلاصتو عبر gaps (سكوت)،
     /// بلا فيديو، مع تحجيم الصوت (volume) عبر ChannelMixingAudioProcessor.
     @OptIn(UnstableApi::class)
@@ -260,6 +279,9 @@ class MainActivity : FlutterActivity() {
                     effectsList.add(SpeedChangeEffect(speed))
                     audioProcessors.add(SonicAudioProcessor().apply { setSpeed(speed) })
                 }
+
+                // V17: الفلتر اللوني (قبل النصّ باش النصّ ما يتفلترش)
+                effectsList.addAll(filterEffects(clip["filter"] as? String))
 
                 // نحوّلو النصوص للتوقيت النسبي متاع هذا الـclip (تقاطع مع نافذتو)
                 val subs = ArrayList<TextEvent>()

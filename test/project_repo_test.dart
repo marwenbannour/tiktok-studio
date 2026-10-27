@@ -344,6 +344,27 @@ void main() {
     expect(cm['timelineMs'], 12000); // 6000 / 0.5
   });
 
+  test('setFilter: يخزّن الفلتر + يحافظ على السرعة فـprops', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 5000, db: db);
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+
+    await ProjectRepo.setFilter(projectId: pid, clipId: a.id, filter: 'cinematic', db: db);
+    var reloaded = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == a.id);
+    expect(ProjectRepo.filterOf(reloaded), 'cinematic');
+
+    // فلتر غير معروف → none
+    await ProjectRepo.setFilter(projectId: pid, clipId: a.id, filter: 'xyz', db: db);
+    reloaded = (await ProjectRepo.clips(pid, db: db)).firstWhere((c) => c.id == a.id);
+    expect(ProjectRepo.filterOf(reloaded), 'none');
+
+    // يبان فالـexport plan
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    expect(plan.clips.first['filter'], 'none');
+  });
+
   test('buildExportPlan: يمرّر audio (voice كامل + music منخفّض)', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(
