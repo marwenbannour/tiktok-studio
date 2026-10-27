@@ -84,8 +84,11 @@ void main() {
 
     final r = await VideoEngine.exportComposition(
       clips: [
-        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': 0},
-        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half},
+        // V14: الـclip الأوّل بسرعة 2x → 250ms على الـtimeline
+        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': 0,
+         'speed': 2.0, 'timelineMs': half ~/ 2},
+        {'path': src.path, 'inMs': 0, 'outMs': half, 'startMs': half ~/ 2,
+         'speed': 1.0, 'timelineMs': half},
       ],
       overlays: [
         // ترجمة منسّقة (سماوي/حجم/محاذاة) تغطّي الـclip الأوّل

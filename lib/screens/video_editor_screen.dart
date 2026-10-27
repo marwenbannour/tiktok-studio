@@ -483,6 +483,20 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                   label: const Text('قسّم لجوجة'),
                 ),
               ),
+              const Divider(height: 28),
+              Text('⏩ السرعة (الحالية: ${_speedLabel(clip.speed)})'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final sp in const [0.5, 1.0, 1.5, 2.0])
+                    ChoiceChip(
+                      label: Text(_speedLabel(sp)),
+                      selected: (clip.speed <= 0 ? 1.0 : clip.speed) == sp,
+                      onSelected: (_) => Navigator.pop(ctx, ('speed', (sp * 100).round())),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -496,12 +510,21 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       case 'split':
         await ProjectRepo.splitVideoClip(
             projectId: widget.projectId, clipId: clip.id, atMs: action.$2);
+      case 'speed':
+        await ProjectRepo.setSpeed(
+            projectId: widget.projectId, clipId: clip.id, speed: action.$2 / 100);
       case 'delete':
         await ProjectRepo.deleteClip(projectId: widget.projectId, clipId: clip.id);
         await _preview?.dispose();
         _preview = null;
     }
     await _load();
+  }
+
+  String _speedLabel(double s) {
+    final v = s <= 0 ? 1.0 : s;
+    final str = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+    return '${str}x';
   }
 
   /// V05: رتّب clips الفيديو بالسحب (ReorderableListView).

@@ -61,9 +61,17 @@ class ProjectRepo {
     await d.replaceClips(projectId, out);
   }
 
-  /// المدّة الظاهرة متاع clip = نافذة المصدر [inMs..outMs].
+  /// طول نافذة المصدر [inMs..outMs] (بلا اعتبار السرعة).
   static int clipDuration(Clip c) {
     final d = c.outMs - c.inMs;
+    return d > 0 ? d : 0;
+  }
+
+  /// المدّة على الـtimeline = نافذة المصدر ÷ السرعة (V14).
+  /// (speed=2 → نصف الوقت؛ speed=0.5 → ضعف الوقت). للـclips غير الفيديو speed=1.
+  static int timelineDuration(Clip c) {
+    final sp = c.speed <= 0 ? 1.0 : c.speed;
+    final d = (clipDuration(c) / sp).round();
     return d > 0 ? d : 0;
   }
 
@@ -77,7 +85,7 @@ class ProjectRepo {
   }) async {
     final d = _resolve(db);
     final videos = (await d.projectClips(projectId)).where((c) => c.track == 'video');
-    final startMs = videos.fold<int>(0, (acc, c) => acc + clipDuration(c));
+    final startMs = videos.fold<int>(0, (acc, c) => acc + timelineDuration(c));
     await d.addClip(ClipsCompanion.insert(
       projectId: projectId,
       track: 'video',
@@ -166,8 +174,21 @@ class ProjectRepo {
       final c = byId[id];
       if (c == null || c.track != 'video') continue;
       await d.updateClip(id, ClipsCompanion(startMs: Value(cursor)));
-      cursor += clipDuration(c);
+      cursor += timelineDuration(c);
     }
+    await _resequenceVideo(projectId, d);
+  }
+
+  /// V14: يبدّل سرعة clip فيديو (0.25..4)، ويعاود يرتّب (المدّة تتبدّل).
+  static Future<void> setSpeed({
+    required int projectId,
+    required int clipId,
+    required double speed,
+    AppDatabase? db,
+  }) async {
+    final d = _resolve(db);
+    final s = speed.clamp(0.25, 4.0);
+    await d.updateClip(clipId, ClipsCompanion(speed: Value(s)));
     await _resequenceVideo(projectId, d);
   }
 
@@ -181,13 +202,13 @@ class ProjectRepo {
       if (v.startMs != cursor) {
         await d.updateClip(v.id, ClipsCompanion(startMs: Value(cursor)));
       }
-      cursor += clipDuration(v);
+      cursor += timelineDuration(v);
     }
     // المدّة = أقصى نهاية بين كل الـclips (فيديو + نصوص/ترجمة)
     var maxEnd = cursor;
     for (final c in clips) {
       if (c.track == 'video') continue;
-      final end = c.startMs + clipDuration(c);
+      final end = c.startMs + timelineDuration(c);
       if (end > maxEnd) maxEnd = end;
     }
     await d.touchProject(projectId, durationMs: maxEnd);
@@ -214,6 +235,8 @@ class ProjectRepo {
         'inMs': c.inMs,
         'outMs': c.outMs > 0 ? c.outMs : c.inMs,
         'startMs': c.startMs,
+        'speed': c.speed <= 0 ? 1.0 : c.speed,
+        'timelineMs': timelineDuration(c), // المدّة على الـtimeline (بعد السرعة)
       });
     }
 
@@ -225,7 +248,7 @@ class ProjectRepo {
       overlays.add({
         'text': txt,
         'startMs': c.startMs,
-        'endMs': c.startMs + clipDuration(c),
+        'endMs': c.startMs + timelineDuration(c),
         'kind': c.track, // 'text' فوق / 'subtitle' تحت
         'color': style['color'] as Object,
         'size': style['size'] as Object,
@@ -342,7 +365,7 @@ class ProjectRepo {
     final d = _resolve(db);
     var maxEnd = 0;
     for (final c in await d.projectClips(projectId)) {
-      final end = c.startMs + clipDuration(c);
+      final end = c.startMs + timelineDuration(c);
       if (end > maxEnd) maxEnd = end;
     }
     await d.touchProject(projectId, durationMs: maxEnd);

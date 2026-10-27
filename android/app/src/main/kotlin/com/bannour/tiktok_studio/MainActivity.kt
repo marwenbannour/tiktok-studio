@@ -17,11 +17,14 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
+import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
@@ -233,7 +236,10 @@ class MainActivity : FlutterActivity() {
                 val inMs = (clip["inMs"] as Number).toLong()
                 val outMs = (clip["outMs"] as Number).toLong()
                 val gStart = (clip["startMs"] as Number).toLong()
-                val gEnd = gStart + (outMs - inMs)
+                val speed = (clip["speed"] as? Number)?.toFloat() ?: 1f
+                // المدّة على الـtimeline (بعد السرعة)؛ fallback لنافذة المصدر
+                val timelineMs = (clip["timelineMs"] as? Number)?.toLong() ?: (outMs - inMs)
+                val gEnd = gStart + timelineMs
 
                 val mediaItem = MediaItem.Builder()
                     .setUri(path)
@@ -247,6 +253,13 @@ class MainActivity : FlutterActivity() {
                 val effectsList = ArrayList<androidx.media3.common.Effect>()
                 effectsList.add(Presentation.createForWidthAndHeight(
                     width, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP))
+
+                // V14: السرعة — فيديو عبر SpeedChangeEffect + صوت عبر SonicAudioProcessor
+                val audioProcessors = ArrayList<AudioProcessor>()
+                if (speed != 1f && speed > 0f) {
+                    effectsList.add(SpeedChangeEffect(speed))
+                    audioProcessors.add(SonicAudioProcessor().apply { setSpeed(speed) })
+                }
 
                 // نحوّلو النصوص للتوقيت النسبي متاع هذا الـclip (تقاطع مع نافذتو)
                 val subs = ArrayList<TextEvent>()
@@ -275,7 +288,7 @@ class MainActivity : FlutterActivity() {
                 }
 
                 seqBuilder.addItem(EditedMediaItem.Builder(mediaItem)
-                    .setEffects(Effects(emptyList(), effectsList))
+                    .setEffects(Effects(audioProcessors, effectsList))
                     .build())
             }
 

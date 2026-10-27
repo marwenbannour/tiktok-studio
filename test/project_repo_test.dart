@@ -307,6 +307,43 @@ void main() {
     expect(ProjectRepo.volumeOf(music.first), ProjectRepo.defaultMusicVolume);
   });
 
+  test('setSpeed: المدّة على الـtimeline = المصدر ÷ السرعة + يعاود يلصق', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 4000, db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/b.mp4', durationMs: 4000, db: db);
+
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+    await ProjectRepo.setSpeed(projectId: pid, clipId: a.id, speed: 2.0, db: db);
+
+    final vids = (await ProjectRepo.clips(pid, db: db))
+        .where((c) => c.track == 'video')
+        .toList()
+      ..sort((x, y) => x.startMs.compareTo(y.startMs));
+    // a: مصدر 4000 بسرعة 2x → 2000 على الـtimeline؛ نافذة المصدر ما تتبدّلش
+    expect(vids[0].speed, 2.0);
+    expect(ProjectRepo.clipDuration(vids[0]), 4000); // نافذة المصدر
+    expect(ProjectRepo.timelineDuration(vids[0]), 2000); // على الـtimeline
+    expect(vids[1].startMs, 2000); // b انزاح لـ2000 (مش 4000)
+  });
+
+  test('setSpeed: buildExportPlan يمرّر speed + timelineMs', () async {
+    final pid = await ProjectRepo.createFromScript(script(), db: db);
+    await ProjectRepo.addVideoClip(
+        projectId: pid, sourcePath: '/a.mp4', durationMs: 6000, db: db);
+    final a = (await ProjectRepo.clips(pid, db: db))
+        .firstWhere((c) => c.sourcePath == '/a.mp4');
+    await ProjectRepo.setSpeed(projectId: pid, clipId: a.id, speed: 0.5, db: db);
+
+    final plan = await ProjectRepo.buildExportPlan(pid, db: db);
+    final cm = plan.clips.first;
+    expect(cm['speed'], 0.5);
+    expect(cm['outMs'], 6000); // المصدر
+    expect(cm['timelineMs'], 12000); // 6000 / 0.5
+  });
+
   test('buildExportPlan: يمرّر audio (voice كامل + music منخفّض)', () async {
     final pid = await ProjectRepo.createFromScript(script(), db: db);
     await ProjectRepo.addVideoClip(
